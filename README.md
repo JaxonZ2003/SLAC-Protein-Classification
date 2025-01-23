@@ -1,3 +1,3 @@
 # capstone-SLAC
 Test
-testing git
+Collaborators: Rebecca Chang, 
