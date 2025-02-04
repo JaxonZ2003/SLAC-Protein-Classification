@@ -10,6 +10,9 @@ from datetime import datetime
 # wd = os.getcwd()
 # print(wd)
 class ImageDataset(Dataset):
+  '''
+  This class is used to load the image dataset from a csv file.
+  '''
   def __init__(self, csvfilePath):
     self.csvfilePath = csvfilePath
     self.dataframe = pd.read_csv(csvfilePath)
@@ -18,7 +21,9 @@ class ImageDataset(Dataset):
     self.numLabel = self.dataframe['label_id'].nunique()
     self.labeldict = {idnum: self.dataframe.index[self.dataframe['label_id'] == idnum].to_list() for idnum in self.dataframe['label_id'].value_counts().index}
     self.transform = v2.Compose([
-      v2.PILToTensor()
+      v2.Resize((224, 224), interpolation=v2.InterpolationMode.BILINEAR, antialias=True),
+      v2.PILToTensor(),
+      v2.ConvertImageDtype(torch.float32)
     ])
 
     dataLastModified = os.stat(self.csvfilePath).st_mtime
@@ -28,15 +33,19 @@ class ImageDataset(Dataset):
     return self.datasize
   
   def __getitem__(self, idx):
+    '''
+    This function is used to get an item from the dataset.
+    '''
     row = self.dataframe.iloc[idx] # get the row
-
-    img = Image.open(row['image_path']).convert('RGB')
-    img = self.transform(img)
-    label = torch.tensor(row['label_id'], dtype = torch.long)
-
+    img = Image.open(row['image_path']).convert('RGB') # convert the image to RGB
+    img = self.transform(img) # apply the transform to the image
+    label = torch.tensor(row['label_id'], dtype = torch.long) # convert the label to a tensor
     return img, label
   
   def summary(self):
+    '''
+    prints a summary of the dataset
+    '''
     print(f"\n{'='*40}")
     print(f"{' '*12}Dataset Summary")
     print(f"{'-'*40}")
@@ -67,6 +76,7 @@ class ImageDataset(Dataset):
 
 if __name__ == "__main__":
   testData = ImageDataset('./data/train_info.csv')
+  print(testData.__getitem__(0)) # displays the first image and label as a tensor
   # print(testData[0])
   testData.summary()
   print(testData.labeldict[2][:10])
