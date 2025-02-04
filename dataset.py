@@ -10,9 +10,6 @@ from datetime import datetime
 # wd = os.getcwd()
 # print(wd)
 class ImageDataset(Dataset):
-  '''
-  This class is used to load the image dataset from a csv file.
-  '''
   def __init__(self, csvfilePath):
     self.csvfilePath = csvfilePath
     self.dataframe = pd.read_csv(csvfilePath)
@@ -33,9 +30,6 @@ class ImageDataset(Dataset):
     return self.datasize
   
   def __getitem__(self, idx):
-    '''
-    This function is used to get an item from the dataset.
-    '''
     row = self.dataframe.iloc[idx] # get the row
     img = Image.open(row['image_path']).convert('RGB') # convert the image to RGB
     img = self.transform(img) # apply the transform to the image
