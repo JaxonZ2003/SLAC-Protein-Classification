@@ -1,3 +1,3 @@
 # capstone-SLAC
 Test
-Collaborators: Rebecca Chang, 
+Collaborators: Rebecca Chang, Reese Karo, Shirley Wang
