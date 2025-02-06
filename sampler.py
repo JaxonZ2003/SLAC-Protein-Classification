@@ -67,3 +67,10 @@ if __name__ == "__main__":
 
   print(testdict)
   print(len(b) == len(indices))
+
+
+  # TEST CASES
+  # testing __len__()
+  expected_len = sum(min(len(v), a.samplePerGroup) for v in a.labeldict.values())
+  assert len(a) == expected_len, f"Expected length: {expected_len}, but got: {len(test)}"
+ 
