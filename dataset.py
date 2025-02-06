@@ -51,9 +51,7 @@ class ImageDataset(Dataset):
     for l in range(self.numLabel):
       print(f"Label {l}: {len(self.labeldict[l])} | {len(self.labeldict[l]) / self.datasize * 100:.2f}%")
     print(f"{'='*40}")
-
-
-
+ 
 
 # dataInfo = pd.read_csv('./data/train_info.csv')
 # dataInfo.reset_index()
@@ -72,7 +70,52 @@ if __name__ == "__main__":
   testData = ImageDataset('./data/train_info.csv')
   print(testData.__getitem__(0)) # displays the first image and label as a tensor
   # print(testData[0])
-  testData.summary()
+  # testData.summary()
   print(testData.labeldict[2][:10])
   print(testData[134][1])
-  print(len(testData))
+  # print(len(testData))
+
+  # TEST CASES
+  # ensure data is a valid dataframe
+  assert isinstance(testData.dataframe, pd.DataFrame)
+
+  # check column names
+  expected_columns = ['image_path', 'image_id', 'label_id', 'label_text', 'label_raw', 'source']
+  assert testData.dataframe.columns.tolist() == expected_columns
+
+  # verify shape and non-emptiness
+  assert testData.dataframe.shape[1] == 6
+  assert not testData.dataframe.empty
+
+  # display DataFrame information
+  print("DatafFrame Info:")
+  print(testData.dataframe.info())
+  print("Random Sample Rows:")
+  print(testData.dataframe.sample(5))
+
+  # print labels sorted by label_id
+  sorted_labels = testData.dataframe[['label_text', 'label_id']].drop_duplicates().sort_values(by='label_id')
+  for index, row in sorted_labels.iterrows():
+    print(f"Label: {row['label_text']}, Label ID: {row['label_id']}")
+
+  # testing __len__()
+  assert len(testData) == testData.dataframe.shape[0]
+  print(f"Dataset Length: {len(testData)}")
+
+  # testing __getitem__()
+  img, label = testData[0]
+  print(f"Image shape: {img.shape}, Label: {label}")
+  ## check types and properties of returned tensors
+  assert isinstance(img, torch.Tensor)
+  assert isinstance(label, torch.Tensor)
+  assert label.dtype == torch.long
+  ## debug print statements for tensor shape and label
+  print(f"Image Tensor Shape: {img.shape}")
+  print(f"Label Tensor Shape: {label.shape}, Value: {label.item()}")
+  print(f"Row at index 0:\n{testData.dataframe.iloc[0]}")
+
+  # testing summary()
+  testData.summary()
+  assert testData.datasize > 0
+  assert isinstance(testData.labeldict, dict)
+  assert testData.numLabel == len(testData.labeldict)
