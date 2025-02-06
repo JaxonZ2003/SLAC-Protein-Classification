@@ -81,3 +81,4 @@ if __name__ == "__main__":
     print(f"Batch size: {data.size(0)}")
     print(f"Image size: {data.size()[1:]}")
     print(f"Target size: {target.size()}")
+    
