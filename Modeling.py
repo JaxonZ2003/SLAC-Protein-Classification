@@ -7,6 +7,7 @@ import torchvision.transforms as transforms
 import pandas as pd
 from PIL import Image
 from dataloader import ImageDataLoader
+from dataset import ImageDataset
 
 class CNN(nn.Module):
     def __init__(self, num_classes, keep_prob):
@@ -63,6 +64,7 @@ class CNN(nn.Module):
         print(self)
     
 if __name__ == "__main__":
+    from dataloader import ImageDataset
     num_classes = 4
     model = CNN(num_classes=num_classes, keep_prob=0.75)
     print(model)
@@ -76,29 +78,27 @@ if __name__ == "__main__":
         transforms.ToTensor()
     ])
 
-    # Update ImageDataset to support transforms
-    class ImageDataset:
-        def __init__(self, csv_file, transform=None):
-            self.data_frame = pd.read_csv(csv_file)
-            self.transform = transform
-
-        def __len__(self):
-            return len(self.data_frame)
-
-        def __getitem__(self, idx):
-            img_path = self.data_frame.iloc[idx, 0]
-            label = self.data_frame.iloc[idx, 1]
-
-            image = Image.open(img_path).convert("RGB")
-
-            if self.transform:
-                image = self.transform(image)
-
-            return image, torch.tensor(label)
-
     train_dataset = ImageDataset(csv_train_file, transform=transform)
     test_dataset = ImageDataset(csv_test_file, transform=transform)
     train_loader = ImageDataLoader(train_dataset).get_loader()
     test_loader = ImageDataLoader(test_dataset).get_loader()
 
+    ##### Testing the model #####
+    print("Training the model...")
+    learning_rate = 0.001
+    criterion = torch.nn.CrossEntropyLoss()    # Softmax is internally computed.
+    optimizer = torch.optim.Adam(params=model.parameters(), lr=learning_rate)
+
+    for epoch in range(10):
+        for batch_idx, (images, labels) in enumerate(train_loader):
+            print(f"Batch {batch_idx+1} of {len(train_loader)}")
+            outputs = model(images) # forward pass
+            loss = criterion(outputs, labels) # compute the loss
+            optimizer.zero_grad() # reset the gradients for each epoch
+            loss.backward() # backward pass
+            optimizer.step() # update the weights
+
+            if batch_idx % 100 == 0:
+                print(f"Epoch {epoch+1}, Batch {batch_idx+1}, Loss: {loss.item():.4f}")
     
+    print("Training complete")

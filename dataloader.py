@@ -76,26 +76,6 @@ if __name__ == "__main__":
         transforms.ToTensor()
     ])
 
-    # Update ImageDataset to support transforms
-    class ImageDataset:
-        def __init__(self, csv_file, transform=None):
-            self.data_frame = pd.read_csv(csv_file)
-            self.transform = transform
-
-        def __len__(self):
-            return len(self.data_frame)
-
-        def __getitem__(self, idx):
-            img_path = self.data_frame.iloc[idx, 0]
-            label = self.data_frame.iloc[idx, 1]
-
-            image = Image.open(img_path).convert("RGB")
-
-            if self.transform:
-                image = self.transform(image)
-
-            return image, torch.tensor(label)
-
     dataset = ImageDataset(csv_file, transform=transform)
     print("Testing dataloader")
 
