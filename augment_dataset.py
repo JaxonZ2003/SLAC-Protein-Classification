@@ -6,9 +6,8 @@ import os
 from torchvision import transforms
 from PIL import Image
 
-
 class ImageDataLoader:
-    def __init__(self, dataset, batch_size=32, shuffle=True, num_workers=4, sampler_type=None, weights=None, indices=None):
+    def __init__(self, dataset, batch_size=32, shuffle=True, num_workers=4, sampler_type=None, weights=None, indices=None, train=True):
         """
         Initializes the DataLoader for the dataset.
 
@@ -77,6 +76,26 @@ if __name__ == "__main__":
         transforms.ToTensor()
     ])
 
+    # Update ImageDataset to support transforms
+    class ImageDataset:
+        def __init__(self, csv_file, transform=None):
+            self.data_frame = pd.read_csv(csv_file)
+            self.transform = transform
+
+        def __len__(self):
+            return len(self.data_frame)
+
+        def __getitem__(self, idx):
+            img_path = self.data_frame.iloc[idx, 0]
+            label = self.data_frame.iloc[idx, 1]
+
+            image = Image.open(img_path).convert("RGB")
+
+            if self.transform:
+                image = self.transform(image)
+
+            return image, torch.tensor(label)
+
     dataset = ImageDataset(csv_file, transform=transform)
     print("Testing dataloader")
 
@@ -125,4 +144,3 @@ if __name__ == "__main__":
         print(f"Batch {batch_idx + 1}:")
         print(f"  Data shape: {data.shape}")
         print(f"  Target shape: {target.shape}")
-
