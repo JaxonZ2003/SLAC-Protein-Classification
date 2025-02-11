@@ -65,43 +65,99 @@ class CNN(nn.Module):
     def summary(self):
         print(self)
     
-if __name__ == "__main__":
-    num_classes = 4
-    input_size = 256
-    model = CNN(num_classes=num_classes, keep_prob=0.75, input_size=input_size)
-    print(model)
-    model.summary()
+def train_model(model, train_loader, num_epochs, optimizer, criterion, device):
+    print(f'Starting training on {device}')
+    train_log = {
+        'train_loss_per_epoch': [],
+        'train_acc_per_epoch': []
+    }
+    
+    for epoch in range(num_epochs):
+        # Training phase
+        model.train()
+        running_loss = 0.0
+        correct = 0
+        total = 0
+        
+        print(f'Epoch {epoch+1}/{num_epochs}')
+        for batch_idx, (images, labels) in enumerate(train_loader):
+            images, labels = images.to(device), labels.to(device)
+            optimizer.zero_grad()
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            
+            # Update running stats
+            running_loss += loss.item()
+            _, predicted = outputs.max(1) # gets the class with the highest probability
+            total += labels.size(0)
+            correct += predicted.eq(labels).sum().item() # if the predicted label equals the actual label, add 1 to the correct
+            
+            if batch_idx % 10 == 0:  # Print every 10 batches
+                print(f'Batch {batch_idx+1}/{len(train_loader)} | Loss: {loss.item():.4f}')
+        
+        # Calculate epoch stats
+        epoch_loss = running_loss / len(train_loader)
+        epoch_acc = correct / total
+        train_log['train_loss_per_epoch'].append(epoch_loss)
+        train_log['train_acc_per_epoch'].append(epoch_acc)
+        
+        print(f'Epoch {epoch+1} - Train Loss: {epoch_loss:.4f}, Train Acc: {epoch_acc:.4f}')
 
-    ##### Testing the dataloader #####
+    return train_log
+
+def evaluate_model(model, dataloader, criterion, device):
+    """Helper function to evaluate the model on a dataset"""
+    model.eval()
+    
+    running_loss = 0.0
+    correct = 0
+    total = 0
+    
+    with torch.no_grad(): # no need to compute gradients
+        for images, labels in dataloader:
+            images, labels = images.to(device), labels.to(device)
+            outputs = model(images) # forward pass
+            loss = criterion(outputs, labels) # compute the loss
+            
+            running_loss += loss.item()
+            _, predicted = outputs.max(1)
+            total += labels.size(0)
+            correct += predicted.eq(labels).sum().item()
+    
+    return running_loss / len(dataloader), correct / total
+
+def test_model(model, dataloader, criterion, device):
+    model.eval()
+    test_loss, test_acc = evaluate_model(model, dataloader, criterion, device)
+    
+    test_log = {
+        'test_loss': test_loss,
+        'test_accuracy': test_acc
+    }
+    
+    print(f'Test Loss: {test_loss:.4f}, Test Accuracy: {test_acc:.4f}')
+    return test_log
+
+if __name__ == "__main__":
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # dataset paths
     csv_train_file = './data/train_info.csv'
     csv_test_file = './data/test_info.csv'
-    transform = transforms.Compose([
-        transforms.Resize((input_size, input_size)),
-        transforms.ToTensor()
-    ])
     
     # load the datasets
-    train_dataset = ImageDataset(csv_train_file, transform=transform)
-    test_dataset = ImageDataset(csv_test_file, transform=transform)
+    train_dataset = ImageDataset(csv_train_file)
+    test_dataset = ImageDataset(csv_test_file)
     train_loader = ImageDataLoader(train_dataset).get_loader()
     test_loader = ImageDataLoader(test_dataset).get_loader()
 
-    ##### Testing the model #####
-    print("Training the model...")
-    learning_rate = 0.001
-    criterion = torch.nn.CrossEntropyLoss()    # Softmax is internally computed.
-    optimizer = torch.optim.Adam(params=model.parameters(), lr=learning_rate)
+    # load the model
+    model = CNN(num_classes=4, keep_prob=0.75, input_size=512)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-    for epoch in range(10):
-        for batch_idx, (images, labels) in enumerate(train_loader):
-            print(f"Batch {batch_idx+1} of {len(train_loader)}")
-            outputs = model(images) # forward pass
-            loss = criterion(outputs, labels) # compute the loss
-            optimizer.zero_grad() # reset the gradients for each epoch
-            loss.backward() # backward pass
-            optimizer.step() # update the weights
+    train_log = train_model(model, train_loader, num_epochs=10, optimizer=optimizer, criterion=criterion, device=device)
 
-            if batch_idx % 100 == 0:
-                print(f"Epoch {epoch+1}, Batch {batch_idx+1}, Loss: {loss.item():.4f}")
-    
-    print("Training complete")
+    test_log = test_model(model, test_loader, criterion, device)
