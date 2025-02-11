@@ -18,7 +18,7 @@ class ImageDataset(Dataset):
     self.numLabel = self.dataframe['label_id'].nunique()
     self.labeldict = {idnum: self.dataframe.index[self.dataframe['label_id'] == idnum].to_list() for idnum in self.dataframe['label_id'].value_counts().index}
     self.transform = v2.Compose([
-      v2.Resize((224, 224), interpolation=v2.InterpolationMode.BILINEAR, antialias=True),
+      v2.Resize((512, 512), interpolation=v2.InterpolationMode.BILINEAR, antialias=True),
       v2.PILToTensor(),
       v2.ConvertImageDtype(torch.float32)
     ])
