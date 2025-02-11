@@ -8,40 +8,42 @@ import pandas as pd
 from PIL import Image
 from dataloader import ImageDataLoader
 from dataset import ImageDataset
+from dataloader import ImageDataset
 
 class CNN(nn.Module):
-    def __init__(self, num_classes, keep_prob):
+    def __init__(self, num_classes, keep_prob, input_size):
         super(CNN, self).__init__()
         self.num_classes = num_classes
         self.keep_prob = keep_prob
-        # L1 ImgIn shape=(?, 256, 256, 3)
-        #    Conv     -> (?, 256, 256, 32)
-        #    Pool     -> (?, 128, 128, 32)
+        self.input_size = input_size
+        # L1 ImgIn shape=(?, input_size, input_size, 3)
+        #    Conv     -> (?, input_size, input_size, 32)
+        #    Pool     -> (?, input_size//2, input_size//2, 32)
         self.layer1 = nn.Sequential(
             nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Dropout(p=1 - keep_prob))
-        # L2 ImgIn shape=(?, 128, 128, 32)
-        #    Conv      ->(?, 128, 128, 64)
-        #    Pool      ->(?, 64, 64, 64)
+        # L2 ImgIn shape=(?, input_size//2, input_size//2, 32)
+        #    Conv      ->(?, input_size//2, input_size//2, 64)
+        #    Pool      ->(?, input_size//4, input_size//4, 64)
         self.layer2 = nn.Sequential(
             nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Dropout(p=1 - keep_prob))
-        # L3 ImgIn shape=(?, 64, 64, 64)
-        #    Conv      ->(?, 64, 64, 128)
-        #    Pool      ->(?, 32, 32, 128)
+        # L3 ImgIn shape=(?, input_size//4, input_size//4, 64)
+        #    Conv      ->(?, input_size//4, input_size//4, 128)
+        #    Pool      ->(?, input_size//8, input_size//8, 128)
         self.layer3 = nn.Sequential(
             nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2, padding=1),
             nn.Dropout(p=1 - keep_prob))
     
-        # L4 Fully Connected Layer 128*32*32 inputs -> 256 outputs
+        # L4 Fully Connected Layer 128*input_size*input_size inputs -> 256 outputs
         self.fc1 = nn.Sequential(
-            nn.Linear(32*32*128, 256, bias=True),
+            nn.Linear((self.input_size//8)*(self.input_size//8)*128, 256, bias=True),
             nn.ReLU(),
             nn.Dropout(p=1 - keep_prob)
         )
@@ -64,9 +66,9 @@ class CNN(nn.Module):
         print(self)
     
 if __name__ == "__main__":
-    from dataloader import ImageDataset
     num_classes = 4
-    model = CNN(num_classes=num_classes, keep_prob=0.75)
+    input_size = 256
+    model = CNN(num_classes=num_classes, keep_prob=0.75, input_size=input_size)
     print(model)
     model.summary()
 
@@ -74,10 +76,11 @@ if __name__ == "__main__":
     csv_train_file = './data/train_info.csv'
     csv_test_file = './data/test_info.csv'
     transform = transforms.Compose([
-        transforms.Resize((256, 256)),  # Resize all images to 256x256
+        transforms.Resize((input_size, input_size)),
         transforms.ToTensor()
     ])
-
+    
+    # load the datasets
     train_dataset = ImageDataset(csv_train_file, transform=transform)
     test_dataset = ImageDataset(csv_test_file, transform=transform)
     train_loader = ImageDataLoader(train_dataset).get_loader()
