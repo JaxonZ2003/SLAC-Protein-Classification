@@ -73,7 +73,7 @@ if __name__ == "__main__":
     ##### Testing the dataloader #####
     csv_file = './data/train_info.csv'
     #transform = transforms.Compose([
-    #    transforms.Resize((256, 256)),  # Resize all images to 256x256
+    #    transforms.Resize((256, 256)),  # Resize all images Shoto 256x256
     #    transforms.ToTensor()
     #])
 
