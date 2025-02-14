@@ -1,0 +1,38 @@
+{
+  "dataset": {
+    "ImageDataset": {
+      "visualizeAndSave":{
+        "title_before_transform": {
+          "x": 0.155,
+          "y": 0.95,
+          "s": "Before Transformation",
+          "ha": "left",
+          "va": "top",
+          "fontsize": 14,
+          "weight": "bold",
+          "color": "blue"
+        },
+        "title_after_transform": {
+          "x": 0.855,
+          "y": 0.95,
+          "s": "After Transformation",
+          "ha": "right",
+          "va": "top",
+          "fontsize": 14,
+          "weight": "bold",
+          "color": "blue"
+        },
+        "label_text_params":{
+          "x": 0.50,
+          "y": 0.05,
+          "s": "Label {}",
+          "ha":"center",
+          "va":"bottom",
+          "fontsize":18,
+          "weight":"bold",
+          "color":"red"
+        }
+      }
+    }
+  }
+}
