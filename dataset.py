@@ -6,6 +6,7 @@ from torch.utils.data import Dataset
 from torchvision.transforms import v2
 from PIL import Image
 from datetime import datetime
+import random
 
 # wd = os.getcwd()
 # print(wd)
@@ -33,9 +34,45 @@ class ImageDataset(Dataset):
     row = self.dataframe.iloc[idx] # get the row
     img = Image.open(row['image_path']).convert('RGB') # convert the image to RGB
     img = self.transform(img) # apply the transform to the image
+
+    # apply augmentations
+    img = self.random_rotation(img)
+    img = self.random_horizontal_flip(img)
+    img = self.random_vertical_flip(img)
+    img = self.random_gaussian_blur(img)
+
     label = torch.tensor(row['label_id'], dtype = torch.long) # convert the label to a tensor
     return img, label
-  
+
+  def random_gaussian_blur(self, img):
+    """Gaussian blur with 50% probability"""
+    if random.random() < 0.5:
+        print("Applying Gaussian Blur")
+        return v2.GaussianBlur(kernel_size=5, sigma=(0.1, 2.0))(img)
+    return img
+
+  def random_rotation(self, img):
+    """Random rotation between -45 to 45 degrees with a 50% probability"""
+    if random.random() < 0.5:
+        angle = random.uniform(-45, 45)
+        print(f"Rotating by {angle:.2f} degrees")
+        return v2.RandomRotation(degrees=(angle, angle))(img)
+    return img
+
+  def random_horizontal_flip(self, img):
+    """Horizontal flip with 50% probability"""
+    if random.random() < 0.5:
+        print("Applying Horizontal Flip")
+        return v2.RandomHorizontalFlip()(img)
+    return img
+
+  def random_vertical_flip(self, img):
+    """Vertical flip with 50% probability"""
+    if random.random() < 0.5:
+        print("Applying Vertical Flip")
+        return v2.RandomVerticalFlip()(img)
+    return img
+
   def summary(self):
     '''
     prints a summary of the dataset
@@ -113,6 +150,11 @@ if __name__ == "__main__":
   print(f"Image Tensor Shape: {img.shape}")
   print(f"Label Tensor Shape: {label.shape}, Value: {label.item()}")
   print(f"Row at index 0:\n{testData.dataframe.iloc[0]}")
+  ## testing augmentation transformations
+  for i in range(10):
+    print(f"\nSample {i}:")
+    img, label = testData[i]
+  
 
   # testing summary()
   testData.summary()
