@@ -72,12 +72,12 @@ class ImageDataLoader:
 if __name__ == "__main__":
     ##### Testing the dataloader #####
     csv_file = './data/train_info.csv'
-    transform = transforms.Compose([
-        transforms.Resize((256, 256)),  # Resize all images to 256x256
-        transforms.ToTensor()
-    ])
+    #transform = transforms.Compose([
+    #    transforms.Resize((256, 256)),  # Resize all images Shoto 256x256
+    #    transforms.ToTensor()
+    #])
 
-    dataset = ImageDataset(csv_file, transform=transform)
+    dataset = ImageDataset(csv_file)
     print("Testing dataloader")
 
     # Test with default parameters
