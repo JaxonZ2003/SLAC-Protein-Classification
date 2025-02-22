@@ -1,15 +1,21 @@
 import json
+import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
+from torchmetrics import AUROC
+from dataset import ImageDataset
+from dataloader import ImageDataLoader
+from data_split import split_train_val
 # model imports
 from Models import CNN, ResNet
 
-def fit(model, train_loader, val_loader, num_epochs, optimizer, criterion, device, save_every=5, callbacks=None, outdir='./models'):
-    print(f'Starting training on {device}')
+def fit(model, train_loader, val_loader, num_epochs, optimizer, criterion, device, save_every=5, lr_scheduler=None, outdir='./models'):
+    print(f'{"#"*10} Starting training on {device} {"#"*10}')
     # key can be the epoch number
+    os.makedirs(outdir, exist_ok=True)
     train_log = {
         'train_loss_per_epoch': [],
         'train_acc_per_epoch': [],
@@ -41,8 +47,6 @@ def fit(model, train_loader, val_loader, num_epochs, optimizer, criterion, devic
             total += labels.size(0)
             correct += predicted.eq(labels).sum().item() # if the predicted label equals the actual label, add 1 to the correct
             
-            if batch_idx % 10 == 0:  # Print every 10 batches
-                print(f'Batch {batch_idx+1}/{len(train_loader)} | Loss: {loss.item():.4f}')
         
         # Calculate epoch stats
         epoch_loss = running_loss / len(train_loader)
@@ -60,18 +64,26 @@ def fit(model, train_loader, val_loader, num_epochs, optimizer, criterion, devic
 
         # save model _save_every_ epochs
         if (epoch + 1) % save_every == 0:
-            save_file = f"{outdir}/model_ep{epoch}.net"
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'train_loss': epoch_loss,
-                'train_acc': epoch_acc,
-                'val_loss': val_loss,
-                'val_acc': val_acc
-            }, save_file)
-            train_log['model_checkpoints'].append(save_file)
-            print(f"Model saved to {save_file}")
+            model_name = os.path.join( outdir, f"model_ep{epoch+1}.net")
+            save_file = os.path.abspath(model_name) 
+            try:
+                torch.save({
+                    'epoch': epoch,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'train_loss': epoch_loss,
+                    'train_acc': epoch_acc,
+                    'val_loss': val_loss,
+                    'val_acc': val_acc
+                }, save_file)
+                train_log['model_checkpoints'].append(save_file)
+                print(f"Model saved to {save_file}")
+            except Exception as e:
+                print(f"Error saving model: {e}")
+        
+        # update learning scheduler
+        if lr_scheduler:
+            lr_scheduler.step(val_loss)
 
         # save the train log to a file
         log_file = f"{outdir}/train_log.json"
@@ -79,7 +91,7 @@ def fit(model, train_loader, val_loader, num_epochs, optimizer, criterion, devic
             json.dump(train_log, f, indent=4)
 
         print(f'Epoch {epoch+1} - Train Loss: {epoch_loss:.4f}, Train Acc: {epoch_acc:.4f} - Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}')
-
+    
     return train_log
 
 def evaluate_model(model, dataloader, criterion, device):
@@ -134,74 +146,53 @@ def test(model, dataloader, criterion, device, outdir='./models'):
 
 
 if __name__ == "__main__":
+    from argparse import ArgumentParser
+    ap = ArgumentParser()
+    ap.add_argument("nepoch", type=int)
+    ap.add_argument("--outdir", type=str, default=None)
+    ap.add_argument("--lr", type=float, default=0.001)
+    args = ap.parse_args()
+
+    if args.outdir is None:
+        
+        try:
+            slurm_jid = os.environ['SLURM_JOB_ID']
+            slurm_jname = os.environ['SLURM_JOB_NAME']
+            username = os.environ['USER']
+            args.outdir = f"/scratch/slac/models/{username}.{slurm_jname}.{slurm_jid}"
+        except KeyError:
+            args.outdir = "./models"
+
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    # simple data set of random data of values
-    train_data = torch.randn(100, 3, 512, 512) # 100 images of 3 channels and 512x512 pixels
-    train_labels = torch.randint(0, 4, (100,)) # 100 labels from 0 to 3
-
-    # validation data same size as test data
-    val_data = torch.randn(20, 3, 512, 512)
-    val_labels = torch.randint(0, 4, (20,))
-
-    # test data
-    test_data = torch.randn(20, 3, 512, 512)
-    test_labels = torch.randint(0, 4, (20,)) 
-
-    train_dataset = torch.utils.data.TensorDataset(train_data, train_labels)
-    test_dataset = torch.utils.data.TensorDataset(test_data, test_labels)
-    val_dataset = torch.utils.data.TensorDataset(val_data, val_labels)
-
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=10, shuffle=True)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=10, shuffle=True)
-    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=10, shuffle=True)
-
-
+    
     # simple model
     model = CNN(num_classes=4, keep_prob=0.75)
     model.to(device)
 
-    criterion = nn.CrossEntropyLoss() # internally computes the softmax so no need for it. 
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-    #lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
-    
-    # train the model
-    train_log = fit(model, train_loader, val_loader, num_epochs=5, optimizer=optimizer, criterion=criterion, device=device)
-    test_log = test(model, test_loader, criterion, device)
+    # split train set into train and val
+    split_train_val('./data/train_info.csv', './data/test_info.csv', './data/val_info.csv', seed=42)
 
-    # plot the training and validation loss and accuracy
-    plt.figure(figsize=(10, 5))
-    plt.plot(train_log['train_loss_per_epoch'], label='Train Loss')
-    plt.plot(train_log['val_loss_per_epoch'], label='Validation Loss')
-    plt.legend()
-    plt.show()
-
-'''
     # dataset paths
     csv_train_file = './data/train_info.csv'
     csv_test_file = './data/test_info.csv'
-    
+    csv_val_file = './data/val_info.csv'
+
     # load the datasets
     train_dataset = ImageDataset(csv_train_file)
     test_dataset = ImageDataset(csv_test_file)
+    val_dataset = ImageDataset(csv_val_file)
+
     train_loader = ImageDataLoader(train_dataset).get_loader()
     test_loader = ImageDataLoader(test_dataset).get_loader()
+    val_loader = ImageDataLoader(val_dataset).get_loader()
 
-    # load the model
-    model = CNN(num_classes=4, keep_prob=0.75, input_size=512)
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    criterion = nn.CrossEntropyLoss() # internally computes the softmax so no need for it. 
+    optimizer = optim.Adam(model.parameters(), lr=args.lr)
+    lr_sched = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=5, verbose=True)
     
-    # add in a learning rate scheduler to reduce the learning rate by 10% every 10 epochs
-    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
-    # add in a early stopping callback
-    early_stopping = 
-    # call backs 
-    callbacks = [
-        lr_scheduler
-    ]
-
-    train_log = train_model(model, train_loader, num_epochs=10, optimizer=optimizer, criterion=criterion, device=device, callbacks=callbacks)
-
-    test_log = test_model(model, test_loader, criterion, device)
-'''
+    # train the model
+    train_log = fit(model, train_loader, val_loader, 
+                    num_epochs=args.nepoch, optimizer=optimizer, criterion=criterion, device=device,
+                    lr_scheduler=lr_sched, outdir=args.outdir)
+    test_log = test(model, test_loader, criterion, device)
