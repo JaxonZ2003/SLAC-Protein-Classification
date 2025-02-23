@@ -9,6 +9,7 @@ from torchmetrics import AUROC
 from dataset import ImageDataset
 from dataloader import ImageDataLoader
 from data_split import split_train_val
+
 # model imports
 from Models import CNN, ResNet
 
@@ -17,12 +18,12 @@ def fit(model, train_loader, val_loader, num_epochs, optimizer, criterion, devic
     # key can be the epoch number
     os.makedirs(outdir, exist_ok=True)
     train_log = {
+        'epochs': [],
         'train_loss_per_epoch': [],
         'train_acc_per_epoch': [],
         'val_loss_per_epoch': [],
         'val_acc_per_epoch': [],
         'learning_rates': [],
-        'epochs': [],  # Add explicit epoch tracking
         'model_checkpoints': []
     }
 
@@ -148,9 +149,10 @@ def test(model, dataloader, criterion, device, outdir='./models'):
 if __name__ == "__main__":
     from argparse import ArgumentParser
     ap = ArgumentParser()
-    ap.add_argument("nepoch", type=int)
+    ap.add_argument("--nepoch", type=int, default=10)
     ap.add_argument("--outdir", type=str, default=None)
     ap.add_argument("--lr", type=float, default=0.001)
+    ap.add_argument("--train", type=bool, default=True)
     args = ap.parse_args()
 
     if args.outdir is None:
@@ -170,18 +172,18 @@ if __name__ == "__main__":
     model = CNN(num_classes=4, keep_prob=0.75)
     model.to(device)
 
-    # split train set into train and val
-    split_train_val('./data/train_info.csv', './data/test_info.csv', './data/val_info.csv', seed=42)
+    ########## split train set into train and val if validation set does not exist #########
+    #split_train_val('./data/train_info.csv', './data/test_info.csv', './data/val_info.csv', seed=42)
 
-    # dataset paths
+    ########## dataset paths #########
     csv_train_file = './data/train_info.csv'
     csv_test_file = './data/test_info.csv'
     csv_val_file = './data/val_info.csv'
 
     # load the datasets
-    train_dataset = ImageDataset(csv_train_file)
-    test_dataset = ImageDataset(csv_test_file)
-    val_dataset = ImageDataset(csv_val_file)
+    train_dataset = ImageDataset(csv_train_file, train=True)
+    test_dataset = ImageDataset(csv_test_file, train=False)
+    val_dataset = ImageDataset(csv_val_file, train=False)
 
     train_loader = ImageDataLoader(train_dataset).get_loader()
     test_loader = ImageDataLoader(test_dataset).get_loader()
@@ -191,8 +193,8 @@ if __name__ == "__main__":
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     lr_sched = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=5, verbose=True)
     
-    # train the model
+    ########## train the model #########
     train_log = fit(model, train_loader, val_loader, 
                     num_epochs=args.nepoch, optimizer=optimizer, criterion=criterion, device=device,
                     lr_scheduler=lr_sched, outdir=args.outdir)
-    test_log = test(model, test_loader, criterion, device)
+    #test_log = test(model, test_loader, criterion, device) # will save testing for later
