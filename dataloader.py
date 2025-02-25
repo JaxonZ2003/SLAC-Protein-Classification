@@ -7,7 +7,7 @@ from torchvision import transforms
 from PIL import Image
 
 
-class ImageDataLoader:
+class ImageDataLoader(DataLoader):
     def __init__(self, dataset, batch_size=32, shuffle=True, num_workers=10, sampler_type=None, weights=None, indices=None):
         """
         Initializes the DataLoader for the dataset.
