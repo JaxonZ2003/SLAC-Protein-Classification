@@ -2,7 +2,7 @@ import random
 import torch
 from torch.utils.data import Sampler
 import numpy as np
-from dataset import ImageDataset
+from dataset.dataset import ImageDataset
 
 class WeightedRandomSampler(Sampler[int]):
     def __init__(self, dataset, weights: torch.Tensor, total_samples: int, allowRepeat=False):
