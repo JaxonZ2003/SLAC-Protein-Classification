@@ -5,19 +5,42 @@ import torch
 import matplotlib.pyplot as plt
 import pytz
 import json
+import random
 from torch.utils.data import Dataset
 from torchvision.transforms import v2
 from PIL import Image
 from datetime import datetime
 
-# wd = os.getcwd()
-# print(wd)
+transformConfig = {
+    "rotation": {
+        "on": True,
+        "params": {
+            "degrees": (-45, 45)
+        }
+    },
+    "horizontal_flip": {
+        "on": True
+    },
+    "vertical_flip": {
+        "on": True
+    },
+    "gaussian_blur": {
+        "on": True,
+        "params": {
+            "kernel_size": 5,
+            "sigma": (0.1, 2.0)
+        }
+    }
+}
+
+
+
 class ImageDataset(Dataset):
-  def __init__(self, csvfilePath):
+  def __init__(self, csvfilePath, transformConfig=transformConfig):
     self.csvfilePath = csvfilePath
     self.dataframe = pd.read_csv(csvfilePath)
-    self.datasetType = self.checkTrainTest()
-    self.config = self.loadConfig()
+    self.datasetType = self._checkTrainTest()
+    self.config = self._loadConfig()
 
     self.datasize = self.dataframe.shape[0]
     self.numLabel = self.dataframe['label_id'].nunique()
@@ -27,6 +50,7 @@ class ImageDataset(Dataset):
       v2.PILToTensor(),
       v2.ConvertImageDtype(torch.float32)
     ])
+    self.transformConfig = transformConfig
 
     dataLastModified = os.stat(self.csvfilePath).st_mtime
     self.dataLastModified = datetime.fromtimestamp(dataLastModified).strftime('%Y-%m-%d %H:%M:%S')
@@ -37,8 +61,16 @@ class ImageDataset(Dataset):
   def __getitem__(self, idx):
     img = Image.open(self.getImagePath(idx))
     img = self.transform(img) # apply the transform to the image
+    transformlog = [""] # use pass by ref to record the transform info
+
+    # apply augmentations
+    img = self._random_rotation(img, transformlog)
+    img = self._random_horizontal_flip(img, transformlog)
+    img = self._random_vertical_flip(img, transformlog)
+    img = self._random_gaussian_blur(img, transformlog)
+
     label = torch.tensor(self.getLabelId(idx), dtype = torch.long) # convert the label to a tensor
-    return img, label
+    return img, label, transformlog[0]
   
   def getImagePath(self, idx):
     row = self.dataframe.iloc[idx]
@@ -48,7 +80,7 @@ class ImageDataset(Dataset):
     row = self.dataframe.iloc[idx]
     return row['label_id']
   
-  def checkTrainTest(self):
+  def _checkTrainTest(self):
     if "test_info" in self.csvfilePath:
       return "TestSet"
     
@@ -58,7 +90,7 @@ class ImageDataset(Dataset):
     else:
       return "Others"
   
-  def loadConfig(self):
+  def _loadConfig(self):
     with open("../config.json", "r") as f:
       allConfig = json.load(f)
     
@@ -66,12 +98,54 @@ class ImageDataset(Dataset):
 
     return config
   
+  def _random_gaussian_blur(self, img, transformlog):
+    """Gaussian blur with 50% probability"""
+    if self.transformConfig["gaussian_blur"]["on"]:
+      params = self.transformConfig["gaussian_blur"]["params"]
+      if random.random() < 0.5:
+          transformlog[0] += f"Gaussian Blur: {str(params)}\n"
+          return v2.GaussianBlur(**params)(img)
+
+    return img
+
+  def _random_rotation(self, img, transformlog):
+    """Random rotation between -45 to 45 degrees with a 50% probability"""
+    if self.transformConfig["rotation"]["on"]:
+      params = self.transformConfig["rotation"]["params"]
+      if random.random() < 0.5:
+          angle = random.uniform(*params["degrees"])
+          transformlog[0] += f"Rotating by {angle:.2f} degrees\n"
+          return v2.RandomRotation(degrees=(angle, angle))(img)
+    
+    return img
+
+  def _random_horizontal_flip(self, img, transformlog):
+    """Horizontal flip with 50% probability"""
+    if self.transformConfig["horizontal_flip"]["on"]:
+      if random.random() < 0.5:
+          transformlog[0] += "Applying Horizontal Flip\n"
+          return v2.RandomHorizontalFlip()(img)
+      
+    return img
+
+  def _random_vertical_flip(self, img, transformlog):
+    """Vertical flip with 50% probability"""
+    if self.transformConfig["horizontal_flip"]["on"]:
+      if random.random() < 0.5:
+          transformlog[0] += "Applying Vertical Flip\n"
+          return v2.RandomVerticalFlip()(img)
+      
+    return img
+
+  
   def visualizeAndSave(self, idx, savedPath='../img/'):
     os.makedirs(savedPath, exist_ok=True) # make a dir if not exists
     titleBefT_params = self.config["visualizeAndSave"]["title_before_transform"]
     titleAftT_params = self.config["visualizeAndSave"]["title_after_transform"]
     label_params = self.config["visualizeAndSave"]["label_text_params"]
     label_params['s'] = label_params['s'].format(self.getLabelId(idx))
+    label_transformlogs = self.config["visualizeAndSave"]["label_transform_logs"]
+
     
     timeNow = datetime.now(pytz.timezone("America/Los_Angeles")).strftime("%Y%m%d%H%M%S")
     filename = f"{savedPath}{self.datasetType}_{timeNow}_{idx}.png"
@@ -80,7 +154,9 @@ class ImageDataset(Dataset):
     imgBefT = Image.open(self.getImagePath(idx))
     
     ### Image After Transform ###
-    imgAftT = self.__getitem__(idx)[0].clone().detach().cpu()
+    res = self.__getitem__(idx)
+    imgAftT = res[0].clone().detach().cpu()
+    label_transformlogs['s'] = label_transformlogs['s'].format(res[2])
     imgAftTnp = imgAftT.numpy().transpose(1, 2, 0)
     # img_np = img_np.clip(img_np, 0, 1)
 
@@ -94,6 +170,7 @@ class ImageDataset(Dataset):
     fig.text(**titleBefT_params)
     fig.text(**titleAftT_params)
     fig.text(**label_params)
+    fig.text(**label_transformlogs)
     plt.tight_layout()
     plt.savefig(filename, bbox_inches='tight', pad_inches=0.1)
     plt.close(fig)
@@ -171,3 +248,4 @@ if __name__ == "__main__":
   # assert isinstance(testData.labeldict, dict)
   # assert testData.numLabel == len(testData.labeldict)
   testData.visualizeAndSave(8)
+  # print(testData[8])
