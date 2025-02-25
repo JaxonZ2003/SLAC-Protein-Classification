@@ -5,11 +5,11 @@ from typing import List
 
 from dataset import ImageDataset
 
-class EqualGroupSampler(Sampler[int]):
-  def __init__(self, dataset, samplePerGroup, allowRepeat=False):
-    self.dataset = dataset
+class StratifiedSampler(Sampler):
+  def __init__(self, data_source, samplePerGroup, allowRepeat=False):
+    self.data_source = data_source
     self.allowRepeat = allowRepeat
-    self.labeldict = dataset.labeldict
+    self.labeldict = data_source.labeldict
 
     if not self.allowRepeat:
       maxSamplePerGroup = min(len(v) for v in self.labeldict.values()) # can't exceed the num for the label with min samples
@@ -49,10 +49,10 @@ class EqualGroupSampler(Sampler[int]):
 
 if __name__ == "__main__":
   test = ImageDataset('./data/train_info.csv')
-  a = EqualGroupSampler(test, 23299)
+  a = StratifiedSampler(test, 23299)
   print(len(a) == 23299 * 4)
 
-  b = EqualGroupSampler(test, 100)
+  b = StratifiedSampler(test, 100)
   indices = list(iter(b))
   print(indices)
 
