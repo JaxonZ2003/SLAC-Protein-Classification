@@ -1,3 +1,4 @@
+import imp
 import pandas as pd
 import numpy as np
 import os
@@ -13,7 +14,7 @@ import random
 # wd = os.getcwd()
 # print(wd)
 class ImageDataset(Dataset):
-  def __init__(self, csvfilePath, model_type='Custom'):
+  def __init__(self, csvfilePath):
     self.csvfilePath = csvfilePath
     self.dataframe = pd.read_csv(csvfilePath)
     self.datasetType = self.checkTrainTest()
@@ -21,13 +22,10 @@ class ImageDataset(Dataset):
     self.datasize = self.dataframe.shape[0]
     self.numLabel = self.dataframe['label_id'].nunique()
     self.labeldict = {idnum: self.dataframe.index[self.dataframe['label_id'] == idnum].to_list() for idnum in self.dataframe['label_id'].value_counts().index}
-    self.model_type = model_type
-    mean, std = self.calc_stats()
     self.transform = v2.Compose([
       v2.Resize((512, 512), interpolation=v2.InterpolationMode.BILINEAR, antialias=True),
       v2.PILToTensor(), # images now 0 - 255
       v2.ConvertImageDtype(torch.float32), # images now 0.0 - 1.0
-      v2.Normalize(mean=mean, std=std) if self.model_type.lower() != "resnet" else v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
     dataLastModified = os.stat(self.csvfilePath).st_mtime
@@ -54,33 +52,10 @@ class ImageDataset(Dataset):
     label = torch.tensor(row['label_id'], dtype = torch.long) # convert the label to a tensor
     return img, label
 
-  def calc_stats(self):
-    # temp transform without normalization
-    temp_transform = v2.Compose([
-      v2.Resize((512, 512), interpolation=v2.InterpolationMode.BILINEAR, antialias=True),
-      v2.PILToTensor(),
-      v2.ConvertImageDtype(torch.float32)
-    ])
-    
-    means = []
-    stds = []
-
-    for idx in range(len(self)):
-      img = Image.open(self.getImagePath(idx))
-      if img.mode != 'RGB':
-        img = img.convert('RGB')
-      img = temp_transform(img)
-      means.append(torch.mean(img, dim=[1, 2]))
-      stds.append(torch.std(img, dim=[1, 2]))
-
-    mean = torch.tensor(means).mean(dim=0)
-    std = torch.tensor(stds).mean(dim=0)
-    return mean, std
-
   def random_gaussian_blur(self, img):
     """Gaussian blur with 50% probability"""
     if random.random() < 0.5:
-        print("Applying Gaussian Blur")
+        #print("Applying Gaussian Blur")
         return v2.GaussianBlur(kernel_size=5, sigma=(0.1, 2.0))(img)
     return img
 
@@ -88,21 +63,21 @@ class ImageDataset(Dataset):
     """Random rotation between -45 to 45 degrees with a 50% probability"""
     if random.random() < 0.5:
         angle = random.uniform(-45, 45)
-        print(f"Rotating by {angle:.2f} degrees")
+        #print(f"Rotating by {angle:.2f} degrees")
         return v2.RandomRotation(degrees=(angle, angle))(img)
     return img
 
   def random_horizontal_flip(self, img):
     """Horizontal flip with 50% probability"""
     if random.random() < 0.5:
-        print("Applying Horizontal Flip")
+        #print("Applying Horizontal Flip")
         return v2.RandomHorizontalFlip()(img)
     return img
 
   def random_vertical_flip(self, img):
     """Vertical flip with 50% probability"""
     if random.random() < 0.5:
-        print("Applying Vertical Flip")
+        #print("Applying Vertical Flip")
         return v2.RandomVerticalFlip()(img)
     return img
   
@@ -125,7 +100,7 @@ class ImageDataset(Dataset):
       return "Others"
   
   def loadConfig(self):
-    with open("../config.json", "r") as f:
+    with open("./config.json", "r") as f:
       allConfig = json.load(f)
     
     config = allConfig["dataset"]["ImageDataset"]
@@ -184,7 +159,7 @@ class ImageDataset(Dataset):
 
 
 if __name__ == "__main__":
-  testData = ImageDataset('../data/train_info.csv')
+  testData = ImageDataset('./data/test_info.csv')
   # print(testData.__getitem__(0)) # displays the first image and label as a tensor
   # # print(testData[0])
   # # testData.summary()
@@ -221,8 +196,9 @@ if __name__ == "__main__":
 
   # # testing __getitem__()
   # img, label = testData[0]
+  # print(img)
   # print(f"Image shape: {img.shape}, Label: {label}")
-  # ## check types and properties of returned tensors
+  # check types and properties of returned tensors
   # assert isinstance(img, torch.Tensor)
   # assert isinstance(label, torch.Tensor)
   # assert label.dtype == torch.long
