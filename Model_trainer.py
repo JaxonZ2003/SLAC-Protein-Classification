@@ -3,44 +3,51 @@ import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 from torchmetrics import AUROC
-from dataset import ImageDataset
+from dataset.dataset import ImageDataset
 from dataloader import ImageDataLoader
 from data_split import split_train_val
-
+from utils import evaluate_model
+import time
 # model imports
-from Models import CNN, ResNet
+from Models import CNN
 
-def fit(model, train_loader, val_loader, num_epochs, optimizer, criterion, device, save_every=5, lr_scheduler=None, outdir='./models'):
-    print(f'{"#"*10} Starting training on {device} {"#"*10}')
+def fit(model, train_loader, val_loader, num_epochs, optimizer, criterion, device, lr_scheduler, save_every=5, outdir='./models'):
+    """
+    Training loop for the model
+    """
+    print('{} Starting training on {} {}'.format('-'*10, device, '-'*10))
     # key can be the epoch number
     os.makedirs(outdir, exist_ok=True)
     train_log = {
-        'epochs': [],
-        'train_loss_per_epoch': [],
-        'train_acc_per_epoch': [],
-        'val_loss_per_epoch': [],
-        'val_acc_per_epoch': [],
+        'epoch': [],
+        'train_loss': [],
+        'train_acc': [],
+        'val_loss': [],
+        'val_acc': [],
         'learning_rates': [],
-        'model_checkpoints': []
+        'model_checkpoints': [],
+        'time_per_epoch': []
     }
 
+    # training loop
     for epoch in range(num_epochs):
         # Training phase
         model.train()
         running_loss = 0.0
         correct = 0
         total = 0
+        start_time = time.time()
+
         print(f'Epoch {epoch+1}/{num_epochs}')
         for batch_idx, (images, labels) in enumerate(train_loader):
             images, labels = images.to(device), labels.to(device)
-            optimizer.zero_grad()
-            outputs = model(images)
-            loss = criterion(outputs, labels) 
-            loss.backward()
-            optimizer.step()
+            optimizer.zero_grad() # zero the gradients
+            outputs = model(images) # forward pass
+            loss = criterion(outputs, labels) # compute the loss
+            loss.backward() # backpropagation
+            optimizer.step() # update the weights
             
             # Update running stats
             running_loss += loss.item()
@@ -52,19 +59,47 @@ def fit(model, train_loader, val_loader, num_epochs, optimizer, criterion, devic
         # Calculate epoch stats
         epoch_loss = running_loss / len(train_loader)
         epoch_acc = correct / total
-        train_log['epochs'].append(epoch + 1)
-        train_log['train_loss_per_epoch'].append(epoch_loss)
-        train_log['train_acc_per_epoch'].append(epoch_acc)
+        train_log['epoch'].append(epoch + 1)
+        train_log['train_loss'].append(epoch_loss)
+        train_log['train_acc'].append(epoch_acc)
 
-        # Validation phase
-        val_loss, val_acc = evaluate_model(model, val_loader, criterion, device)
-        train_log['val_loss_per_epoch'].append(val_loss)
-        train_log['val_acc_per_epoch'].append(val_acc)
+        # After training phase
+        model.eval()
+        min_val_loss = float('inf')
+        val_running_loss = 0.0  # Separate variable for validation
+        val_correct = 0
+        val_total = 0
+        with torch.no_grad():
+            for images, labels in val_loader:
+                images, labels = images.to(device), labels.to(device)
+                outputs = model(images)
+                loss = criterion(outputs, labels)
+                val_running_loss += loss.item()
+                _, predicted = outputs.max(1)
+                val_total += labels.size(0)
+                val_correct += predicted.eq(labels).sum().item()
 
+        val_loss = val_running_loss / len(val_loader)
+        val_acc = val_correct / val_total
+
+        # update the minimum validation loss
+        if val_loss < min_val_loss:
+            min_val_loss = val_loss
+
+        # update the validation loss and accuracy
+        train_log['val_loss'].append(val_loss)
+        train_log['val_acc'].append(val_acc)
+
+        # update the learning rate
         train_log['learning_rates'].append(optimizer.param_groups[0]['lr'])
 
-        # save model _save_every_ epochs
-        if (epoch + 1) % save_every == 0:
+        end_time = time.time()
+        time_per_epoch = end_time - start_time
+        train_log['time_per_epoch'].append(time_per_epoch)
+
+        # save model if the loss is the lowest so far
+        if val_loss < min_val_loss:
+            min_val_loss = val_loss
             model_name = os.path.join( outdir, f"model_ep{epoch+1}.net")
             save_file = os.path.abspath(model_name) 
             try:
@@ -78,47 +113,22 @@ def fit(model, train_loader, val_loader, num_epochs, optimizer, criterion, devic
                     'val_acc': val_acc
                 }, save_file)
                 train_log['model_checkpoints'].append(save_file)
-                print(f"Model saved to {save_file}")
+                print("New best model saved to {}".format(save_file))
             except Exception as e:
-                print(f"Error saving model: {e}")
+                print("Error saving model: {}".format(e))
         
-        # update learning scheduler
-        if lr_scheduler:
-            lr_scheduler.step(val_loss)
+        # update the learning rate scheduler
+        lr_scheduler.step(val_loss)
 
         # save the train log to a file
         log_file = f"{outdir}/train_log.json"
         with open(log_file, "w") as f:
             json.dump(train_log, f, indent=4)
 
-        print(f'Epoch {epoch+1} - Train Loss: {epoch_loss:.4f}, Train Acc: {epoch_acc:.4f} - Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}')
-    
+        print('Epoch {} - Train Loss: {:.4f}, Train Acc: {:.4f} - Val Loss: {:.4f}, Val Acc: {:.4f}'.format(epoch+1, epoch_loss, epoch_acc, val_loss, val_acc))
     return train_log
 
-def evaluate_model(model, dataloader, criterion, device):
-    """Helper function to evaluate the model on a dataset"""
-    model.eval()
-    
-    running_loss = 0.0
-    correct = 0
-    total = 0
-    
-    with torch.no_grad(): # no need to compute gradients
-        for images, labels in dataloader:
-            images, labels = images.to(device), labels.to(device)
-            outputs = model(images) # forward pass
-            loss = criterion(outputs, labels) # compute the loss
-            
-            running_loss += loss.item()
-            _, predicted = outputs.max(1)
-            total += labels.size(0)
-            correct += predicted.eq(labels).sum().item()
-    
-    return running_loss / len(dataloader), correct / total
-
 def test(model, dataloader, criterion, device, outdir='./models'):
-    model.eval()
-    # eval the model on test set
     test_loss, test_acc = evaluate_model(model, dataloader, criterion, device)
     
     # save as a dictionary
@@ -147,12 +157,12 @@ def test(model, dataloader, criterion, device, outdir='./models'):
 
 
 if __name__ == "__main__":
+    ########## parse arguments #########
     from argparse import ArgumentParser
     ap = ArgumentParser()
     ap.add_argument("--nepoch", type=int, default=10)
     ap.add_argument("--outdir", type=str, default=None)
     ap.add_argument("--lr", type=float, default=0.001)
-    ap.add_argument("--train", type=bool, default=True)
     args = ap.parse_args()
 
     if args.outdir is None:
@@ -181,20 +191,21 @@ if __name__ == "__main__":
     csv_val_file = './data/val_info.csv'
 
     # load the datasets
-    train_dataset = ImageDataset(csv_train_file, train=True)
-    test_dataset = ImageDataset(csv_test_file, train=False)
-    val_dataset = ImageDataset(csv_val_file, train=False)
+    train_dataset = ImageDataset(csv_train_file)
+    test_dataset = ImageDataset(csv_test_file)
+    val_dataset = ImageDataset(csv_val_file)
 
-    train_loader = ImageDataLoader(train_dataset).get_loader()
-    test_loader = ImageDataLoader(test_dataset).get_loader()
-    val_loader = ImageDataLoader(val_dataset).get_loader()
+    train_loader = ImageDataLoader(train_dataset, num_workers=4).get_loader()
+    test_loader = ImageDataLoader(test_dataset, num_workers=4).get_loader()
+    val_loader = ImageDataLoader(val_dataset, num_workers=4).get_loader()
 
     criterion = nn.CrossEntropyLoss() # internally computes the softmax so no need for it. 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
-    lr_sched = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=5, verbose=True)
+    lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=5, min_lr=1e-6)
+    
     
     ########## train the model #########
-    train_log = fit(model, train_loader, val_loader, 
-                    num_epochs=args.nepoch, optimizer=optimizer, criterion=criterion, device=device,
-                    lr_scheduler=lr_sched, outdir=args.outdir)
+    train_log = fit(model, train_loader, val_loader, num_epochs=args.nepoch, 
+                    optimizer=optimizer, criterion=criterion, device=device, 
+                    lr_scheduler=lr_scheduler, outdir=args.outdir)
     #test_log = test(model, test_loader, criterion, device) # will save testing for later

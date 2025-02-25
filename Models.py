@@ -14,6 +14,7 @@ class CNN(nn.Module):
         #    Pool     -> (?, input_size//2, input_size//2, 32)
         self.layer1 = nn.Sequential(
             nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Dropout(p=1 - keep_prob))
@@ -22,6 +23,7 @@ class CNN(nn.Module):
         #    Pool      ->(?, input_size//4, input_size//4, 64)
         self.layer2 = nn.Sequential(
             nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(64),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Dropout(p=1 - keep_prob))
@@ -30,6 +32,7 @@ class CNN(nn.Module):
         #    Pool      ->(?, input_size//8, input_size//8, 128)
         self.layer3 = nn.Sequential(
             nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(128),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Dropout(p=1 - keep_prob))
@@ -40,15 +43,15 @@ class CNN(nn.Module):
             nn.ReLU(),
             nn.Dropout(p=1 - keep_prob)
         )
-        # L5 Fully Connected Layer 256 inputs -> num_classes outputs
+        # L5 Fully Connected Layer 512 inputs -> num_classes outputs
         self.fc2 = nn.Sequential(
             nn.Linear(256, num_classes, bias=True) # no need for softmax since the loss function is cross entropy
         )
 
     def forward(self, x):
-        out = self.layer1(x) # Conv -> ReLU -> MaxPool -> Dropout
-        out = self.layer2(out) # Conv -> ReLU -> MaxPool -> Dropout
-        out = self.layer3(out) # Conv -> ReLU -> MaxPool -> Dropout
+        out = self.layer1(x) # Conv + batch norm -> ReLU -> MaxPool -> Dropout
+        out = self.layer2(out) # Conv + batch norm -> ReLU -> MaxPool -> Dropout
+        out = self.layer3(out) # Conv + batch norm -> ReLU -> MaxPool -> Dropout
         out = out.view(out.size(0), -1) # Flatten them for FC, should be
         out = self.fc1(out) # FC -> ReLU -> Dropout
         out = self.fc2(out) # FC -> logits for our criterion
@@ -57,29 +60,44 @@ class CNN(nn.Module):
     def summary(self):
         print(self)
 
-######################### ResNet50 Model ###############################
+######################### ResNet Model ###############################
 
 class ResNet(nn.Module):
     def __init__(self, num_classes, keep_prob):
         super(ResNet, self).__init__()
-        # load the pretrained resnet50 model
-        self.resnet = models.resnet50(pretrained=True)
-
-        # freeze all layers but the last one
-        for param in self.resnet.parameters():
-            param.requires_grad = False
-
-        for param in self.resnet.layer4.parameters():
-            param.requires_grad = True
-
-        # remove the last fc layer add our custom fc layer
-        num_features = self.resnet.fc.in_features
-        self.resnet.fc = nn.Sequential(
-            nn.Linear(num_features, 512),
+        self.num_classes = num_classes
+        self.resnet50 = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        self.fc_layer1 = nn.Sequential(
+            nn.Linear(1000, 256),
             nn.ReLU(),
             nn.Dropout(p=1 - keep_prob),
-            nn.Linear(512, num_classes)
         )
+        self.fc_layer2 = nn.Sequential(
+            nn.Linear(256, num_classes)
+        )
+
+    def freeze_resnet50(self):
+        for param in self.resnet50.parameters():
+            param.requires_grad = False
+
+    def unfreeze_resnet50(self):
+        '''Function to unfreeze layer 4 and fc layer of resnet50'''
+        for param in self.resnet50.layer4.parameters():
+            param.requires_grad = True
+        for param in self.resnet50.fc.parameters():
+            param.requires_grad = True
+
+    def transfer_learn(self):
+        '''Function to transfer learn the model'''
+        self.freeze_resnet50()
+        self.unfreeze_resnet50()
+        print('Transfer learning complete')
         
     def forward(self, x):
-        return self.resnet(x)
+        x = self.resnet50(x)
+        x = self.fc_layer1(x)
+        x = self.fc_layer2(x)
+        return x
+    
+    def summary(self):
+        print(self)

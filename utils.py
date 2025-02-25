@@ -4,22 +4,31 @@ import random
 import pandas as pd
 import numpy as np
 
-class EarlyStopping:
-    def __init__(self, patience=10, min_delta=0):
-        self.patience = patience
-        self.min_delta = min_delta
-        self.counter = 0
-        self.best_loss = None
-        self.stop_training = False
 
-    def __call__(self, epoch_loss):
-        if self.best_loss is None:
-            self.best_loss = epoch_loss
-        elif epoch_loss > self.best_loss:
-            self.counter += 1
-            if self.counter >= self.patience:
-                self.stop_training = True
+def evaluate_model(model, dataloader, criterion, device):
+    """
+    Evaluation helper function for a model to evaluate on a dataset
+    """
+    model.eval()
+    running_loss = 0.0
+    correct = 0
+    total = 0
 
+    with torch.no_grad():
+        for images, labels in dataloader:
+            images, labels = images.to(device), labels.to(device)
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+            running_loss += loss.item()
+            _, predicted = outputs.max(1)
+            
+            total += labels.size(0)
+            correct += predicted.eq(labels).sum().item()
+
+    test_loss = running_loss / len(dataloader)
+    test_acc = correct / total
+
+    return test_loss, test_acc
 
 def split_train_val(train_csv, test_csv, val_csv_destination: str, seed: int = 42):
     """
