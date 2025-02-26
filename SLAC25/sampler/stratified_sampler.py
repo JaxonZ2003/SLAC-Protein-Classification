@@ -3,7 +3,7 @@ import random
 from torch.utils.data import Sampler
 from typing import List
 
-from dataset import ImageDataset
+from dataset.dataset import ImageDataset
 
 class StratifiedSampler(Sampler):
   def __init__(self, data_source, samplePerGroup, allowRepeat=False):
