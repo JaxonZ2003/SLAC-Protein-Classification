@@ -26,7 +26,7 @@ train_dataset = ImageDataset('./data/train_sample.csv')
 train_loader = ImageDataLoader(train_dataset, batch_size=10, num_workers=4).get_loader()
 
 # load model
-model_check = CNN(num_classes=4, keep_prob=0.75)
+model_check = (num_classes=4, keep_prob=0.75)
 model_check.to(device)
 
 # fit the model
