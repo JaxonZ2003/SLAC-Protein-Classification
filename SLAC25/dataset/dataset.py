@@ -91,7 +91,7 @@ class ImageDataset(Dataset):
       return "Others"
   
   def _loadConfig(self):
-    with open("../config.json", "r") as f:
+    with open("../../config.json", "r") as f:
       allConfig = json.load(f)
     
     config = allConfig["dataset"]["ImageDataset"]
