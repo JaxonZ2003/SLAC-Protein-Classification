@@ -69,6 +69,7 @@ class ResNet(nn.Module):
         self.resnet50 = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
         self.fc_layer1 = nn.Sequential(
             nn.Linear(1000, 256),
+            nn.BatchNorm1d(256),
             nn.ReLU(),
             nn.Dropout(p=1 - keep_prob),
         )
