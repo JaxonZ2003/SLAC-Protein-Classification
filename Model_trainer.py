@@ -160,6 +160,7 @@ if __name__ == "__main__":
     ########## parse arguments #########
     from argparse import ArgumentParser
     ap = ArgumentParser()
+    ap.add_argument('--num_workers', type=int, default=1)
     ap.add_argument("--nepoch", type=int, default=10)
     ap.add_argument("--outdir", type=str, default=None)
     ap.add_argument("--lr", type=float, default=0.001)
@@ -195,9 +196,9 @@ if __name__ == "__main__":
     test_dataset = ImageDataset(csv_test_file)
     val_dataset = ImageDataset(csv_val_file)
 
-    train_loader = ImageDataLoader(train_dataset, num_workers=4).get_loader()
-    test_loader = ImageDataLoader(test_dataset, num_workers=4).get_loader()
-    val_loader = ImageDataLoader(val_dataset, num_workers=4).get_loader()
+    train_loader = ImageDataLoader(train_dataset, num_workers=args.num_workers).get_loader()
+    test_loader = ImageDataLoader(test_dataset, num_workers=args.num_workers).get_loader()
+    val_loader = ImageDataLoader(val_dataset, num_workers=args.num_workers).get_loader()
 
     criterion = nn.CrossEntropyLoss() # internally computes the softmax so no need for it. 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
