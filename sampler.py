@@ -3,7 +3,7 @@ import random
 from torch.utils.data import Sampler
 from typing import List
 
-from dataset.dataset import ImageDataset
+from dataset import ImageDataset
 
 class EqualGroupSampler(Sampler[int]):
   def __init__(self, dataset, samplePerGroup, allowRepeat=False):

@@ -55,7 +55,7 @@ def split_train_val(train_csv, test_csv, val_csv_destination: str, seed: int = 4
     print(val_df.head())
 
 # create a function for visualizing the performance of the model via train log from the json file
-def visualize_performance(train_log_path, out_dir: str):
+def visualize_performance(train_log_path: str, out_dir: str, file_name: str) -> None:
     import json
     import matplotlib.pyplot as plt
 
@@ -64,30 +64,40 @@ def visualize_performance(train_log_path, out_dir: str):
         train_log = json.load(f)
 
     # variables for plotting
-    epochs = train_log['epochs']
-    train_loss = train_log['train_loss_per_epoch']
-    val_loss = train_log['val_loss_per_epoch']
-    train_acc = train_log['train_acc_per_epoch']
-    val_acc = train_log['val_acc_per_epoch']
+    epochs = train_log['epoch']
+    train_loss = train_log['train_loss']
+    val_loss = train_log['val_loss']
+    train_acc = train_log['train_acc']
+    val_acc = train_log['val_acc']
+
+    # Check if validation data is all zeros
+    if all(v == 0 for v in val_loss):
+        print("Warning: Validation loss data is all zeros.")
+        val_loss = None
+
+    if all(v == 0 for v in val_acc):
+        print("Warning: Validation accuracy data is all zeros.")
+        val_acc = None
 
     # plotting
     fig, axs = plt.subplots(1, 2, figsize=(15, 5))
 
     axs[0].plot(epochs, train_loss, label='Training Loss')
-    axs[0].plot(epochs, val_loss, label='Validation Loss')
+    if val_loss is not None:
+        axs[0].plot(epochs, val_loss, label='Validation Loss')
     axs[0].set_xlabel('Epoch')
     axs[0].set_ylabel('Loss')
     axs[0].legend()
 
     axs[1].plot(epochs, train_acc, label='Training Accuracy')
-    axs[1].plot(epochs, val_acc, label='Validation Accuracy')
+    if val_acc is not None:
+        axs[1].plot(epochs, val_acc, label='Validation Accuracy')
     axs[1].set_xlabel('Epoch')
     axs[1].set_ylabel('Accuracy')
     axs[1].legend()
 
     plt.tight_layout()
-    plt.savefig(out_dir + '/performance_plot.png')
+    plt.savefig(out_dir + '/' + file_name)
     plt.close()
 
-    print(f"Performance plot saved to {out_dir}/performance_plot.png")
-    
+    print(f"Performance plot saved to {out_dir}/{file_name}")
