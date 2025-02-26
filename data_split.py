@@ -2,7 +2,7 @@ import random
 import pandas as pd
 import numpy as np
 
-from dataset.dataset import ImageDataset
+from dataset import ImageDataset
 
 def split_train_val(train_csv, test_csv, val_csv_destination, seed = 42):
     """

@@ -1,7 +1,7 @@
 import torch
 import pandas as pd
 from torch.utils.data import DataLoader, WeightedRandomSampler, RandomSampler, SequentialSampler, SubsetRandomSampler
-from dataset.dataset import ImageDataset
+from dataset import ImageDataset
 import os
 from torchvision import transforms
 from PIL import Image

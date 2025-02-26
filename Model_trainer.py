@@ -3,17 +3,15 @@ import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import matplotlib.pyplot as plt
-from torchmetrics import AUROC
-from dataset.dataset import ImageDataset
+from dataset import ImageDataset
 from dataloader import ImageDataLoader
 from data_split import split_train_val
 from utils import evaluate_model
 import time
 # model imports
-from Models import CNN
+from Models import CNN, ResNet
 
-def fit(model, train_loader, val_loader, num_epochs, optimizer, criterion, device, lr_scheduler, save_every=5, outdir='./models'):
+def fit(model, train_loader, num_epochs, optimizer, criterion, device, lr_scheduler=None, val_loader=None, outdir='./models'):
     """
     Training loop for the model
     """
@@ -30,7 +28,9 @@ def fit(model, train_loader, val_loader, num_epochs, optimizer, criterion, devic
         'model_checkpoints': [],
         'time_per_epoch': []
     }
-
+    # init. min. val. loss to infinity
+    min_val_loss = float('inf') 
+    
     # training loop
     for epoch in range(num_epochs):
         # Training phase
@@ -64,31 +64,57 @@ def fit(model, train_loader, val_loader, num_epochs, optimizer, criterion, devic
         train_log['train_acc'].append(epoch_acc)
 
         # After training phase
-        model.eval()
-        min_val_loss = float('inf')
-        val_running_loss = 0.0  # Separate variable for validation
-        val_correct = 0
-        val_total = 0
-        with torch.no_grad():
-            for images, labels in val_loader:
-                images, labels = images.to(device), labels.to(device)
-                outputs = model(images)
-                loss = criterion(outputs, labels)
-                val_running_loss += loss.item()
-                _, predicted = outputs.max(1)
-                val_total += labels.size(0)
-                val_correct += predicted.eq(labels).sum().item()
+        if val_loader is not None: # if there is a validation set
+            model.eval()
+            val_running_loss = 0.0  # Separate variable for validation
+            val_correct = 0
+            val_total = 0
+            with torch.no_grad():
+                for images, labels in val_loader:
+                    images, labels = images.to(device), labels.to(device)
+                    outputs = model(images)
+                    loss = criterion(outputs, labels)
+                    val_running_loss += loss.item()
+                    _, predicted = outputs.max(1)
+                    val_total += labels.size(0)
+                    val_correct += predicted.eq(labels).sum().item()
 
-        val_loss = val_running_loss / len(val_loader)
-        val_acc = val_correct / val_total
+            val_loss = val_running_loss / len(val_loader)
+            val_acc = val_correct / val_total
 
-        # update the minimum validation loss
-        if val_loss < min_val_loss:
-            min_val_loss = val_loss
+            # update the minimum validation loss
+            if val_loss < min_val_loss:
+                min_val_loss = val_loss
+                # save model if the loss is the lowest so far
+                model_name = os.path.join( outdir, f"model_ep{epoch+1}.net")
+                save_file = os.path.abspath(model_name) 
+                try:
+                    torch.save({
+                        'epoch': epoch,
+                        'model_state_dict': model.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'train_loss': epoch_loss,
+                        'train_acc': epoch_acc,
+                        'val_loss': val_loss,
+                        'val_acc': val_acc
+                    }, save_file)
+                    train_log['model_checkpoints'].append(save_file)
+                    print("New best model saved to {}".format(save_file))
+                except Exception as e:
+                    print("Error saving model: {}".format(e))
 
-        # update the validation loss and accuracy
-        train_log['val_loss'].append(val_loss)
-        train_log['val_acc'].append(val_acc)
+
+            # update the validation loss and accuracy
+            train_log['val_loss'].append(val_loss)
+            train_log['val_acc'].append(val_acc)
+
+        # if no validation set, skip the validation phase and fill in 0's
+        else:
+            val_loss = 0
+            val_acc = 0
+            train_log['val_loss'].append(val_loss)
+            train_log['val_acc'].append(val_acc)
+
 
         # update the learning rate
         train_log['learning_rates'].append(optimizer.param_groups[0]['lr'])
@@ -96,36 +122,19 @@ def fit(model, train_loader, val_loader, num_epochs, optimizer, criterion, devic
         end_time = time.time()
         time_per_epoch = end_time - start_time
         train_log['time_per_epoch'].append(time_per_epoch)
-
-        # save model if the loss is the lowest so far
-        if val_loss < min_val_loss:
-            min_val_loss = val_loss
-            model_name = os.path.join( outdir, f"model_ep{epoch+1}.net")
-            save_file = os.path.abspath(model_name) 
-            try:
-                torch.save({
-                    'epoch': epoch,
-                    'model_state_dict': model.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                    'train_loss': epoch_loss,
-                    'train_acc': epoch_acc,
-                    'val_loss': val_loss,
-                    'val_acc': val_acc
-                }, save_file)
-                train_log['model_checkpoints'].append(save_file)
-                print("New best model saved to {}".format(save_file))
-            except Exception as e:
-                print("Error saving model: {}".format(e))
         
         # update the learning rate scheduler
-        lr_scheduler.step(val_loss)
+        if val_loader is not None:
+            print("Stepping learning rate scheduler by a factor of {}".format(lr_scheduler.factor))
+            lr_scheduler.step(val_loss)
 
         # save the train log to a file
         log_file = f"{outdir}/train_log.json"
         with open(log_file, "w") as f:
             json.dump(train_log, f, indent=4)
 
-        print('Epoch {} - Train Loss: {:.4f}, Train Acc: {:.4f} - Val Loss: {:.4f}, Val Acc: {:.4f}'.format(epoch+1, epoch_loss, epoch_acc, val_loss, val_acc))
+        print('Epoch {} - Train Loss: {:.4f}, Train Acc: {:.4f} - Val Loss: {:.4f}, Val Acc: {:.4f}, Time Taken: {:.2f}s'.format(epoch+1, epoch_loss, epoch_acc, val_loss, val_acc, time_per_epoch))
+    print('{} Training complete! {}'.format('-'*10, '-'*10))
     return train_log
 
 def test(model, dataloader, criterion, device, outdir='./models'):
@@ -157,7 +166,7 @@ def test(model, dataloader, criterion, device, outdir='./models'):
 
 
 if __name__ == "__main__":
-    ########## parse arguments #########
+    ########## parse arguments for the command line interface #########
     from argparse import ArgumentParser
     ap = ArgumentParser()
     ap.add_argument('--num_workers', type=int, default=1)
