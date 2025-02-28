@@ -61,7 +61,7 @@ class TransformV1():
       return True
   
   def _recordTf(self, idx, action):
-    if not self.tf_config:
+    if self.tf_config is None:
       return
     
     if not self.tf_config.get(idx):
@@ -70,8 +70,8 @@ class TransformV1():
     self.tf_config[idx].append(str(action))
 
   def _emptyRecord(self, idx):
-    if not self.tf_log:
-      return 
+    if self.tf_log is None:
+      return
     
     if not self.tf_config.get(idx):
       return

@@ -15,7 +15,7 @@ from transform import TransformV1
 
 
 class ImageDataset(Dataset):
-  def __init__(self, csvfilePath, transform=None, config=None, recordTransform=True):
+  def __init__(self, csvfilePath, transform=None, config=None, recordTransform=False):
     self.csvfilePath = csvfilePath
     self.dataframe = pd.read_csv(csvfilePath)
     self.datasetType = self._checkTrainTest()
