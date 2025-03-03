@@ -1,5 +1,5 @@
 from Model_trainer import *
-from dataset import ImageDataset
+from dataset_main import ImageDataset
 from dataloader import ImageDataLoader
 import pandas as pd
 import torch
