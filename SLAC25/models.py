@@ -4,9 +4,9 @@ import torchvision.models as models
 
 ######################### Simple CNN Model ###############################
 
-class CNN(nn.Module):
+class BaselineCNN(nn.Module):
     def __init__(self, num_classes, keep_prob):
-        super(CNN, self).__init__()
+        super(BaselineCNN, self).__init__()
         self.num_classes = num_classes
         self.keep_prob = keep_prob
         # L1 ImgIn shape=(?, input_size, input_size, 3)
