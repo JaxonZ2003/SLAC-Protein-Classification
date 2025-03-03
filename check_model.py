@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from utils import *
+from Models import *
 
 '''
 This script will be used to check the model if it works properly with no errors on our own device (i.e. not CSC).
@@ -26,7 +27,8 @@ train_dataset = ImageDataset('./data/train_sample.csv')
 train_loader = ImageDataLoader(train_dataset, batch_size=10, num_workers=4).get_loader()
 
 # load model
-model_check = (num_classes=4, keep_prob=0.75)
+model_check = ResNet(num_classes=4, keep_prob=0.75)
+model_check.transfer_learn() # allows transfer learning
 model_check.to(device)
 
 # fit the model

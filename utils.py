@@ -54,6 +54,55 @@ def split_train_val(train_csv, test_csv, val_csv_destination: str, seed: int = 4
     print("Validation Set Sample:")
     print(val_df.head())
 
+
+class EarlyStopping:
+    '''Early stopping if the validation loss does not improve after a given patience'''
+    def __init__(self, patience=7, delta=0, path='checkpoint.pt', verbose=False):
+        '''
+        Args:
+            patience (int): How long to wait after last time validation loss improved.
+            delta (float): Minimum change in the monitored quantity to qualify as an improvement.
+            path (str): Path for saving model.
+            verbose (bool): If True, prints a message for each validation loss improvement.
+        '''
+        self.patience = patience
+        self.delta = delta
+        self.path = path
+        self.verbose = verbose
+        self.counter = 0 # counter to store the number of epochs since last improvement
+        self.best_score = None
+        self.early_stop = False
+        self.val_loss_min = torch.inf # initialize best loss to infinity
+        
+    def __call__(self, val_loss, model):
+        score = val_loss  # use validation loss directly
+        # if no best loss we set to current loss
+        if self.best_score is None:
+            self.best_score = score
+            self.save_checkpoint(val_loss, model)
+        # if loss doesn't improve (is greater or equal), we increment the counter by 1
+        elif score >= self.best_score - self.delta:
+            self.counter += 1
+            if self.verbose:
+                print(f'EarlyStopping counter: {self.counter} out of {self.patience}')
+            if self.counter >= self.patience:
+                self.early_stop = True
+                print("Early stopping")
+        else:  # if loss improves (decreases), we save the model and continue training
+            self.best_score = score
+            self.save_checkpoint(val_loss, model)  # save the model
+            self.counter = 0  # reset the counter
+    
+    def save_checkpoint(self, val_loss, model):
+        '''
+        Saves the model when validation loss decreases.
+        - Useful when we start to overfit, we can return to the previous best model.
+        '''
+        if self.verbose:
+            print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
+        torch.save(model.state_dict(), self.path)
+        self.val_loss_min = val_loss
+
 # create a function for visualizing the performance of the model via train log from the json file
 def visualize_performance(train_log_path: str, out_dir: str, file_name: str) -> None:
     import json
