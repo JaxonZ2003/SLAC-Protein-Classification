@@ -6,12 +6,12 @@ import torch.optim as optim
 from dataset import ImageDataset
 from dataloader import ImageDataLoader
 from data_split import split_train_val
-from utils import evaluate_model
+from utils import *
 import time
 # model imports
 from Models import CNN, ResNet
 
-def fit(model, train_loader, num_epochs, optimizer, criterion, device, lr_scheduler=None, val_loader=None, outdir='./models'):
+def fit(model, train_loader, num_epochs, optimizer, criterion, device, lr_scheduler=None, val_loader=None, early_stopping=None, outdir='./models'):
     """
     Training loop for the model
     """
@@ -29,8 +29,13 @@ def fit(model, train_loader, num_epochs, optimizer, criterion, device, lr_schedu
         'time_per_epoch': []
     }
     # init. min. val. loss to infinity
-    min_val_loss = float('inf') 
+    min_val_loss = float('inf')
+
+    # initialize early stopping
+    if early_stopping is not None:
+        print("Early Stopping is enabled")
     
+
     # training loop
     for epoch in range(num_epochs):
         # Training phase
@@ -124,16 +129,23 @@ def fit(model, train_loader, num_epochs, optimizer, criterion, device, lr_schedu
         train_log['time_per_epoch'].append(time_per_epoch)
         
         # update the learning rate scheduler
-        if val_loader is not None:
+        if val_loader is not None and lr_scheduler is not None:
             print("Stepping learning rate scheduler by a factor of {}".format(lr_scheduler.factor))
             lr_scheduler.step(val_loss)
+
+        # check if early stopping is triggered
+        if val_loader is not None and early_stopping is not None:
+            early_stopping(val_loss, model)
+            if early_stopping.early_stop: # flag that is raised or not
+                print("Early stopping")
+                break # stop training
 
         # save the train log to a file
         log_file = f"{outdir}/train_log.json"
         with open(log_file, "w") as f:
             json.dump(train_log, f, indent=4)
 
-        print('Epoch {} - Train Loss: {:.4f}, Train Acc: {:.4f} - Val Loss: {:.4f}, Val Acc: {:.4f}, Time Taken: {:.2f}s'.format(epoch+1, epoch_loss, epoch_acc, val_loss, val_acc, time_per_epoch))
+        print('Epoch {} - Train Loss: {:.4f}, Train Acc: {:.4f} - Val Loss: {:.4f}, Val Acc: {:.4f}, Time Taken: {:.2f}s'.format(epoch+1, epoch_loss, 100.0*epoch_acc, val_loss, 100.0*val_acc, time_per_epoch))
     print('{} Training complete! {}'.format('-'*10, '-'*10))
     return train_log
 
@@ -161,7 +173,7 @@ def test(model, dataloader, criterion, device, outdir='./models'):
     with open(log_file, "w") as f:
         json.dump(full_log, f, indent=4)
 
-    print(f'Test Loss: {test_loss:.4f}, Test Accuracy: {test_acc:.4f}')
+    print(f'Test Loss: {test_loss:.4f}, Test Accuracy: {100.0*test_acc:.4f}')
     return test_log
 
 
@@ -212,10 +224,10 @@ if __name__ == "__main__":
     criterion = nn.CrossEntropyLoss() # internally computes the softmax so no need for it. 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=5, min_lr=1e-6)
-    
+    early_stopping = EarlyStopping(patience=7, path=os.path.join(args.outdir, 'checkpoint.pt'), verbose=True)
     
     ########## train the model #########
     train_log = fit(model, train_loader, val_loader, num_epochs=args.nepoch, 
                     optimizer=optimizer, criterion=criterion, device=device, 
-                    lr_scheduler=lr_scheduler, outdir=args.outdir)
+                    lr_scheduler=lr_scheduler, early_stopping=early_stopping, outdir=args.outdir)
     #test_log = test(model, test_loader, criterion, device) # will save testing for later
