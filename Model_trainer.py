@@ -3,7 +3,8 @@ import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from dataset import ImageDataset
+from dataset_main import ImageDataset
+from sampler import EqualGroupSampler
 from dataloader import ImageDataLoader
 from data_split import split_train_val
 from utils import *
@@ -214,10 +215,13 @@ if __name__ == "__main__":
 
     # load the datasets
     train_dataset = ImageDataset(csv_train_file)
+    train_sampler = EqualGroupSampler(train_dataset, 23299)
+    if len(train_sampler) != 23299 * 4:
+        raise ValueError("Train sampler length is not equal to 23299 * 4")
     test_dataset = ImageDataset(csv_test_file)
     val_dataset = ImageDataset(csv_val_file)
 
-    train_loader = ImageDataLoader(train_dataset, num_workers=args.num_workers).get_loader()
+    train_loader = ImageDataLoader(train_sampler, num_workers=args.num_workers).get_loader()
     test_loader = ImageDataLoader(test_dataset, num_workers=args.num_workers).get_loader()
     val_loader = ImageDataLoader(val_dataset, num_workers=args.num_workers).get_loader()
 
