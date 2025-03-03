@@ -11,7 +11,7 @@ from torchvision.transforms import v2
 from PIL import Image
 from datetime import datetime
 
-from transform import TransformV1
+from SLAC25.transform import TransformV1
 
 
 class ImageDataset(Dataset):
@@ -67,7 +67,11 @@ class ImageDataset(Dataset):
       return "Others"
   
   def _loadConfig(self):
-    with open("../../config.json", "r") as f:
+    package_root = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(package_root, "..", "config.json")
+    config_path = os.path.abspath(config_path)
+
+    with open(config_path, "r") as f:
       allConfig = json.load(f)
     
     config = allConfig["dataset"]["ImageDataset"]
@@ -82,7 +86,12 @@ class ImageDataset(Dataset):
       self.transform = transform
 
   
-  def visualizeAndSave(self, idx, savedPath='../img/'):
+  def visualizeAndSave(self, idx, savedPath=None):
+    if savedPath is None:
+      package_root = os.path.dirname(os.path.abspath(__file__))
+      savedPath = os.path.join(package_root, "..", "img")
+      savedPath = os.path.abspath(savedPath)
+
     os.makedirs(savedPath, exist_ok=True) # make a dir if not exists
     titleBefT_params = self.config["visualizeAndSave"]["title_before_transform"]
     titleAftT_params = self.config["visualizeAndSave"]["title_after_transform"]
@@ -92,7 +101,8 @@ class ImageDataset(Dataset):
 
     
     timeNow = datetime.now(pytz.timezone("America/Los_Angeles")).strftime("%Y%m%d%H%M%S")
-    filename = f"{savedPath}{self.datasetType}_{timeNow}_{idx}.png"
+    filename = os.path.join(savedPath ,f"{self.datasetType}_{timeNow}_{idx}.png")
+    filename = os.path.abspath(filename)
 
     ### Image Before Transform ###
     imgBefT = Image.open(self.getImagePath(idx))
@@ -138,7 +148,10 @@ class ImageDataset(Dataset):
 
 
 if __name__ == "__main__":
-  testData = ImageDataset('../../data/train_info.csv', transform=None, config=None, recordTransform=True)
+  package_root = os.path.dirname(os.path.abspath(__file__))
+  data_path = os.path.join(package_root, "..", "data", "train_info.csv")
+  data_path = os.path.abspath(data_path)
+  testData = ImageDataset(data_path, transform=None, config=None, recordTransform=True)
 
-  testData.visualizeAndSave(8)
-
+  testData.visualizeAndSave(123)
+  # print(data_path)

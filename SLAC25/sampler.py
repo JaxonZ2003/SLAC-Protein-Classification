@@ -1,9 +1,10 @@
 import random
+import os
 
 from torch.utils.data import Sampler
 from typing import List
 
-from dataset.dataset import ImageDataset
+from SLAC25.dataset import ImageDataset
 
 class StratifiedSampler(Sampler):
   def __init__(self, data_source, samplePerGroup, allowRepeat=False):
@@ -48,7 +49,11 @@ class StratifiedSampler(Sampler):
     
 
 if __name__ == "__main__":
-  test = ImageDataset('./data/train_info.csv')
+  package_root = os.path.dirname(os.path.abspath(__file__))
+  data_path = os.path.join(package_root, "..", "data", "train_info.csv")
+  data_path = os.path.abspath(data_path)
+
+  test = ImageDataset(data_path)
   a = StratifiedSampler(test, 23299)
   print(len(a) == 23299 * 4)
 
