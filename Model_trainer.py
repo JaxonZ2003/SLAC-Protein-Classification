@@ -1,24 +1,23 @@
 import json
 import os
 import torch
+import sys
+import math
+import time
 import torch.nn as nn
 import torch.optim as optim
-from dataset_main import ImageDataset
-from sampler import EqualGroupSampler
-from dataloader import ImageDataLoader
-from data_split import split_train_val
-from utils import *
-import time
+import matplotlib.pyplot as plt
+from torchmetrics import AUROC
+from SLAC25.dataset import ImageDataset
+from SLAC25.dataloader import DataLoaderFactory
+from SLAC25.utils import split_train_val, evaluate_model
+from SLAC25.models import CNN
 # model imports
-from Models import CNN, ResNet
 
-def fit(model, train_loader, num_epochs, optimizer, criterion, device, lr_scheduler=None, val_loader=None, early_stopping=None, outdir='./models'):
+def fit(model, train_loader, val_loader, num_epochs, optimizer, criterion, device, lr_scheduler, save_every=5, outdir='./models', verbose=False):
     """
     Training loop for the model
     """
-    print('{} Starting training on {} {}'.format('-'*10, device, '-'*10))
-    # key can be the epoch number
-    os.makedirs(outdir, exist_ok=True)
     train_log = {
         'epoch': [],
         'train_loss': [],
@@ -29,13 +28,11 @@ def fit(model, train_loader, num_epochs, optimizer, criterion, device, lr_schedu
         'model_checkpoints': [],
         'time_per_epoch': []
     }
-    # init. min. val. loss to infinity
-    min_val_loss = float('inf')
 
-    # initialize early stopping
-    if early_stopping is not None:
-        print("Early Stopping is enabled")
-    
+    print('{} Starting training on {} {}'.format('-'*10, device, '-'*10))
+    print(f"Total epochs: {num_epochs}")
+    # key can be the epoch number
+    os.makedirs(outdir, exist_ok=True)
 
     # training loop
     for epoch in range(num_epochs):
@@ -46,7 +43,6 @@ def fit(model, train_loader, num_epochs, optimizer, criterion, device, lr_schedu
         total = 0
         start_time = time.time()
 
-        print(f'Epoch {epoch+1}/{num_epochs}')
         for batch_idx, (images, labels) in enumerate(train_loader):
             images, labels = images.to(device), labels.to(device)
             optimizer.zero_grad() # zero the gradients
@@ -54,6 +50,14 @@ def fit(model, train_loader, num_epochs, optimizer, criterion, device, lr_schedu
             loss = criterion(outputs, labels) # compute the loss
             loss.backward() # backpropagation
             optimizer.step() # update the weights
+
+            if verbose:
+                print(f'Epoch: {epoch + 1}/{num_epochs} | Batch: {batch_idx + 1} | Loss: {loss:.3f}')
+            
+            if loss is None or math.isnan(loss) or math.isinf(loss):
+                print(f"Error: Loss became undefined or infinite at Epoch: {epoch + 1} | Batch: {batch_idx + 1}.")
+                print(f"Stopping training.")
+                sys.exit(1)
             
             # Update running stats
             running_loss += loss.item()
@@ -69,58 +73,32 @@ def fit(model, train_loader, num_epochs, optimizer, criterion, device, lr_schedu
         train_log['train_loss'].append(epoch_loss)
         train_log['train_acc'].append(epoch_acc)
 
-        # After training phase
-        if val_loader is not None: # if there is a validation set
-            model.eval()
-            val_running_loss = 0.0  # Separate variable for validation
-            val_correct = 0
-            val_total = 0
-            with torch.no_grad():
-                for images, labels in val_loader:
-                    images, labels = images.to(device), labels.to(device)
-                    outputs = model(images)
-                    loss = criterion(outputs, labels)
-                    val_running_loss += loss.item()
-                    _, predicted = outputs.max(1)
-                    val_total += labels.size(0)
-                    val_correct += predicted.eq(labels).sum().item()
+        # After training phase: Validation phase
+        model.eval()
+        min_val_loss = float('inf')
+        val_running_loss = 0.0  # Separate variable for validation
+        val_correct = 0
+        val_total = 0
+        with torch.no_grad():
+            for images, labels in val_loader:
+                images, labels = images.to(device), labels.to(device)
+                outputs = model(images)
+                loss = criterion(outputs, labels)
+                val_running_loss += loss.item()
+                _, predicted = outputs.max(1)
+                val_total += labels.size(0)
+                val_correct += predicted.eq(labels).sum().item()
 
             val_loss = val_running_loss / len(val_loader)
             val_acc = val_correct / val_total
 
-            # update the minimum validation loss
-            if val_loss < min_val_loss:
-                min_val_loss = val_loss
-                # save model if the loss is the lowest so far
-                model_name = os.path.join( outdir, f"model_ep{epoch+1}.net")
-                save_file = os.path.abspath(model_name) 
-                try:
-                    torch.save({
-                        'epoch': epoch,
-                        'model_state_dict': model.state_dict(),
-                        'optimizer_state_dict': optimizer.state_dict(),
-                        'train_loss': epoch_loss,
-                        'train_acc': epoch_acc,
-                        'val_loss': val_loss,
-                        'val_acc': val_acc
-                    }, save_file)
-                    train_log['model_checkpoints'].append(save_file)
-                    print("New best model saved to {}".format(save_file))
-                except Exception as e:
-                    print("Error saving model: {}".format(e))
+        # update the minimum validation loss
+        if val_loss < min_val_loss:
+            min_val_loss = val_loss
 
-
-            # update the validation loss and accuracy
-            train_log['val_loss'].append(val_loss)
-            train_log['val_acc'].append(val_acc)
-
-        # if no validation set, skip the validation phase and fill in 0's
-        else:
-            val_loss = 0
-            val_acc = 0
-            train_log['val_loss'].append(val_loss)
-            train_log['val_acc'].append(val_acc)
-
+        # update the validation loss and accuracy
+        train_log['val_loss'].append(val_loss)
+        train_log['val_acc'].append(val_acc)
 
         # update the learning rate
         train_log['learning_rates'].append(optimizer.param_groups[0]['lr'])
@@ -128,6 +106,26 @@ def fit(model, train_loader, num_epochs, optimizer, criterion, device, lr_schedu
         end_time = time.time()
         time_per_epoch = end_time - start_time
         train_log['time_per_epoch'].append(time_per_epoch)
+
+        # save model if the loss is the lowest so far
+        if val_loss < min_val_loss:
+            min_val_loss = val_loss
+            model_name = os.path.join(outdir, f"model_ep{epoch+1}.net")
+            save_file = os.path.abspath(model_name) 
+            try:
+                torch.save({
+                    'epoch': epoch,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'train_loss': epoch_loss,
+                    'train_acc': epoch_acc,
+                    'val_loss': val_loss,
+                    'val_acc': val_acc
+                }, save_file)
+                train_log['model_checkpoints'].append(save_file)
+                print("New best model saved to {}".format(save_file))
+            except Exception as e:
+                print("Error saving model: {}".format(e))
         
         # update the learning rate scheduler
         if val_loader is not None and lr_scheduler is not None:
@@ -221,9 +219,16 @@ if __name__ == "__main__":
     test_dataset = ImageDataset(csv_test_file)
     val_dataset = ImageDataset(csv_val_file)
 
-    train_loader = ImageDataLoader(train_sampler, num_workers=args.num_workers).get_loader()
-    test_loader = ImageDataLoader(test_dataset, num_workers=args.num_workers).get_loader()
-    val_loader = ImageDataLoader(val_dataset, num_workers=args.num_workers).get_loader()
+    train_factory = DataLoaderFactory(train_dataset, num_workers=4)
+    train_factory.setSequentialSampler()
+    test_factory = DataLoaderFactory(test_dataset, num_workers=4)
+    test_factory.setSequentialSampler()
+    val_factory = DataLoaderFactory(val_dataset, num_workers=4)
+    val_factory.setSequentialSampler()
+
+    train_loader = train_factory.outputDataLoader()
+    test_loader = test_factory.outputDataLoader()
+    val_loader = val_factory.outputDataLoader()
 
     criterion = nn.CrossEntropyLoss() # internally computes the softmax so no need for it. 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
