@@ -1,0 +1,12 @@
+[project]
+name = "SLAC25"
+version = "0.1"
+dependencies = ["pandas", "torch", "torchvision"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["SLAC25*"]
+
+[project.scripts]
+"SLAC25.testbase" = "SLAC25.scripts.base_mod_test:main"
+
