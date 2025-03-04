@@ -25,10 +25,10 @@ if args.outdir is None:
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # simple model
-CNNWrapper = BaselineCNN_Wrapper(num_classes=4, keep_prob=0.75, num_epochs=3)
+CNNWrapper = BaselineCNN_Wrapper(num_classes=4, keep_prob=0.75, num_epochs=3, verbose=True)
 # enable testmode for smaller sample size
 # enable verbose for detailed info
-CNNWrapper._prepareDataLoader(testmode=True, verbose=True)
+CNNWrapper._prepareDataLoader(testmode=True)
 train_log = CNNWrapper.train()
 
 
