@@ -10,7 +10,7 @@
 #SBATCH -t 15:00:00 ### Job Execution Time
 
 LR=0.001
-srun -c 4 python ./Model_trainer.py --num_workers 4 --nepoch 20 --lr $LR
+srun -c 4 python ./__main__.py --num_workers 4 --nepoch 20 --lr $LR
 
 
 #srun -c 4 /home/reesekaro/train_wrapper.sh $LR
