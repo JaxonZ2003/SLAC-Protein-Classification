@@ -3,6 +3,7 @@ import torch
 import random
 import pandas as pd
 import numpy as np
+import os
 
 
 def evaluate_model(model, dataloader, criterion, device):
@@ -149,4 +150,20 @@ def visualize_performance(train_log_path: str, out_dir: str, file_name: str) -> 
     plt.savefig(out_dir + '/' + file_name)
     plt.close()
 
+<<<<<<< HEAD:utils.py
     print(f"Performance plot saved to {out_dir}/{file_name}")
+=======
+    print(f"Performance plot saved to {out_dir}/performance_plot.png")
+
+if __name__ == "__main__":
+    package_root = os.path.dirname(os.path.abspath(__file__))
+    train_path = os.path.join(package_root, "..", "data", "train_info.csv")
+    train_path = os.path.abspath(train_path)
+    test_path = os.path.join(package_root, "..", "data", "test_info.csv")
+    test_path = os.path.abspath(test_path)
+    des_path = os.path.join(package_root, "..", "data", "val_info.csv")
+    des_path = os.path.abspath(des_path)
+    split_train_val(train_path, test_path, des_path, seed=42)
+    # print(train_path)
+    # print(test_path)
+>>>>>>> origin/organize:SLAC25/utils.py

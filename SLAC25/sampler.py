@@ -1,15 +1,20 @@
 import random
+import os
 
 from torch.utils.data import Sampler
 from typing import List
 
+<<<<<<< HEAD:sampler.py
 from dataset_main import ImageDataset
+=======
+from SLAC25.dataset import ImageDataset
+>>>>>>> origin/organize:SLAC25/sampler.py
 
-class EqualGroupSampler(Sampler[int]):
-  def __init__(self, dataset, samplePerGroup, allowRepeat=False):
-    self.dataset = dataset
+class StratifiedSampler(Sampler):
+  def __init__(self, data_source, samplePerGroup, allowRepeat=False):
+    self.data_source = data_source
     self.allowRepeat = allowRepeat
-    self.labeldict = dataset.labeldict
+    self.labeldict = data_source.labeldict
 
     if not self.allowRepeat:
       maxSamplePerGroup = min(len(v) for v in self.labeldict.values()) # can't exceed the num for the label with min samples
@@ -48,11 +53,15 @@ class EqualGroupSampler(Sampler[int]):
     
 
 if __name__ == "__main__":
-  test = ImageDataset('./data/train_info.csv')
-  a = EqualGroupSampler(test, 23299)
+  package_root = os.path.dirname(os.path.abspath(__file__))
+  data_path = os.path.join(package_root, "..", "data", "train_info.csv")
+  data_path = os.path.abspath(data_path)
+
+  test = ImageDataset(data_path)
+  a = StratifiedSampler(test, 23299)
   print(len(a) == 23299 * 4)
 
-  b = EqualGroupSampler(test, 100)
+  b = StratifiedSampler(test, 100)
   indices = list(iter(b))
   print(indices)
 
