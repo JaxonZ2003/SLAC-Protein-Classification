@@ -31,6 +31,15 @@
           "fontsize":18,
           "weight":"bold",
           "color":"red"
+        },
+        "label_transform_logs": {
+          "x": 0.50,
+          "y": -0.05,
+          "s": "{}",
+          "ha":"center",
+          "va":"bottom",
+          "fontsize": 8,
+          "color":"black"
         }
       }
     }
