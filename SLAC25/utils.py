@@ -4,6 +4,8 @@ import random
 import pandas as pd
 import numpy as np
 import os
+import json
+import matplotlib.pyplot as plt
 
 
 def evaluate_model(model, dataloader, criterion, device):
@@ -105,13 +107,17 @@ class EarlyStopping:
         self.val_loss_min = val_loss
 
 # create a function for visualizing the performance of the model via train log from the json file
-def visualize_performance(train_log_path: str, out_dir: str, file_name: str) -> None:
-    import json
-    import matplotlib.pyplot as plt
+def visualize_performance(train_log, out_dir: str, file_name: str) -> None:
+    '''
+    Visualize the performance of the model via train log from the json file
+    Args:
+        train_log: train log variable from the model wrapper, ModelWrapper.train()
+        out_dir: directory to save the plot
+        file_name: name of the file to save the plot
+    '''
 
     # Load the train log from the JSON file
-    with open(train_log_path, 'r') as f:
-        train_log = json.load(f)
+    train_log = train_log
 
     # variables for plotting
     epochs = train_log['epoch']
@@ -150,9 +156,6 @@ def visualize_performance(train_log_path: str, out_dir: str, file_name: str) -> 
     plt.savefig(out_dir + '/' + file_name)
     plt.close()
 
-<<<<<<< HEAD:utils.py
-    print(f"Performance plot saved to {out_dir}/{file_name}")
-=======
     print(f"Performance plot saved to {out_dir}/performance_plot.png")
 
 if __name__ == "__main__":
@@ -166,4 +169,3 @@ if __name__ == "__main__":
     split_train_val(train_path, test_path, des_path, seed=42)
     # print(train_path)
     # print(test_path)
->>>>>>> origin/organize:SLAC25/utils.py
