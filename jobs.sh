@@ -5,21 +5,12 @@
 #SBATCH --cpus-per-task=2
 #SBATCH --partition=gpu ## Request 1 GPU   
 #SBATCH --gres=gpu:1
-#SBATCH -o /home/jaxonz/logs/outLog_%x_%j.txt ### Output Log File (Optional)
-#SBATCH -e  /home/jaxonz/logs/errLog_%x_%j.txt ### Error Log File (Optional but suggest to have it)
-#SBATCH --mail-type=END, FAIL
-#SBATCH --mail-user=yangzhang@ucsb.edu
+#SBATCH -o /scratch/slac/slurmlogs/outLog_%x_%j.txt ### Output Log File (Optional)
+#SBATCH -e /scratch/slac/slurmlogs/errLog_%x_%j.txt ### Error Log File (Optional but suggest to have it)
 #SBATCH -t 15:00:00 ### Job Execution Time
 
-# if [[ "$(hostname)" != "pod-gpu.podcluster" ]]; then
-#   echo "Not on pod-gpu.podcluster, attempting to SSH into pod-gpu"
-#   ssh pod-gpu exec "$0"
-#   echo "Now on $(hostname)"
-#   exit 0
-# fi
-
-if [[ "$DIALS" != "$HOME/dials/modules" ]]; then
-  echo "Environment not set correctly, attempting to source ~/dials.sh"
+LR=0.001
+srun -c 4 python ./__main__.py --num_workers 4 --nepoch 20 --lr $LR
 
   if [[ -f "$HOME/dials.sh" ]]; then
     source "$HOME/dials.sh"

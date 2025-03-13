@@ -23,10 +23,12 @@ class DataLoaderFactory:
             indices (list, optional): List of indices for subset sampling.
         """
         self.dataset = dataset
-        self.batch_size = self.setBatchSize(batch_size)
-        self.num_workers = self.setNumWorkers(num_workers)
         self.pin_memory = pin_memory
         self.drop_last = drop_last
+        self.sampler = None
+
+        self.setBatchSize(batch_size)
+        self.setNumWorkers(num_workers)
 
         # self.sampler = self._create_sampler(sampler_type, weights, indices)
 
@@ -38,62 +40,31 @@ class DataLoaderFactory:
         #     sampler=self.sampler
         # )
     
-    def createRandomSampler(self, replacement=False, num_samples=None, generator=None):
-        sampler = RandomSampler(self.dataset, replacement, num_samples, generator)
-        return DataLoader(self.dataset,
-                          batch_size=self.batch_size,
-                          sampler=sampler,
-                          num_workers=self.num_workers,
-                          pin_memory=self.pin_memory,
-                          drop_last=self.drop_last)
+    def setRandomSampler(self, replacement=False, num_samples=None, generator=None):
+        self.sampler = RandomSampler(self.dataset, replacement, num_samples, generator)
     
-    def createWeightedRandomSampler(self, weights, num_samples=1000, replacement=True, generator=None):
+    def setWeightedRandomSampler(self, weights, num_samples=1000, replacement=True, generator=None):
         if weights != len(self.dataset):
              raise ValueError(
                  f"Invalid weights: Expected a list of length {len(self.dataset)}, "
                  f"but received a list of length {len(weights)}. Each data point in the dataset must have a corresponding weight."
         )
 
-        sampler = WeightedRandomSampler(weights, num_samples, replacement, generator)
-        return DataLoader(self.dataset,
-                          batch_size=self.batch_size,
-                          sampler=sampler,
-                          num_workers=self.num_workers,
-                          pin_memory=self.pin_memory,
-                          drop_last=self.drop_last)
+        self.sampler = WeightedRandomSampler(weights, num_samples, replacement, generator)
     
-    def createSequentialSampler(self):
-        sampler = SequentialSampler(self.dataset)
-        return DataLoader(self.dataset,
-                    batch_size=self.batch_size,
-                    sampler=sampler,
-                    num_workers=self.num_workers,
-                    pin_memory=self.pin_memory,
-                    drop_last=self.drop_last)
+    def setSequentialSampler(self):
+        self.sampler = SequentialSampler(self.dataset)
     
-    def createSubsetRandomSampler(self, indices, generator=None):
+    def setSubsetRandomSampler(self, indices, generator=None):
         if indices is None:
             raise ValueError("Indices are required for subset sampling.")
         
-        sampler = SubsetRandomSampler(indices, generator)
-        return DataLoader(self.dataset,
-                          batch_size=self.batch_size,
-                          sampler=sampler,
-                          num_workers=self.num_workers,
-                          pin_memory=self.pin_memory,
-                          drop_last=self.drop_last)
+        self.sampler = SubsetRandomSampler(indices, generator)
     
-    def createStratifiedSampler(self, samplePerGroup, allowRepeat=False):
-        sampler = StratifiedSampler(data_source=self.dataset,
+    def setStratifiedSampler(self, samplePerGroup, allowRepeat=False):
+        self.sampler = StratifiedSampler(data_source=self.dataset,
                                     samplePerGroup=samplePerGroup,
-                                    allowRepeat=allowRepeat)
-        
-        return DataLoader(self.dataset,
-                          batch_size=self.batch_size,
-                          sampler=sampler,
-                          num_workers=self.num_workers,
-                          pin_memory=self.pin_memory,
-                          drop_last=self.drop_last)
+                                    allowRepeat=allowRepeat)       
     
     def setBatchSize(self, batch_size):
         if batch_size <= 0:
@@ -106,6 +77,17 @@ class DataLoaderFactory:
             raise ValueError("Number of workers must be non-negative.")
 
         self.num_workers = num_workers
+
+    def outputDataLoader(self):
+        if self.sampler is None:
+            raise RuntimeError("Please define a sampler for the dataLoader first before output a DataLoader")
+
+        return DataLoader(self.dataset,
+                          batch_size=self.batch_size,
+                          sampler=self.sampler,
+                          num_workers=self.num_workers,
+                          pin_memory=self.pin_memory,
+                          drop_last=self.drop_last)
 
     # def _create_sampler(self, sampler_type, weights, indices):
     #     """
@@ -138,21 +120,25 @@ class DataLoaderFactory:
 
 if __name__ == "__main__":
     ##### Testing the dataloader #####
-    csv_file = './data/train_info.csv'
+    package_root = os.path.dirname(os.path.abspath(__file__))
+    data_path = os.path.join(package_root, "..", "data", "train_info.csv")
+    data_path = os.path.abspath(data_path)
     #transform = transforms.Compose([
     #    transforms.Resize((256, 256)),  # Resize all images Shoto 256x256
     #    transforms.ToTensor()
     #])
 
-    dataset = ImageDataset(csv_file)
+    dataset = ImageDataset(data_path)
     dataloader = DataLoaderFactory(dataset, batch_size=3)
     print("Testing dataloader")
 
     # # Test with default parameters
     # print("\n1. Testing with default parameters")
-    train_loader = dataloader.createStratifiedSampler(15)
+    dataloader.setStratifiedSampler(1)
+    train_loader = dataloader.outputDataLoader()
     for batch in train_loader:
         print(batch)
+        break
 
 
     # data, target = next(iter(train_loader))
