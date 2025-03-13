@@ -32,7 +32,7 @@ class Wrapper:
         self.testmode = testmode
         self._prepareDataLoader()
 
-    def _prepareDataLoader(self, batch_size=32, testmode=False):
+    def _prepareDataLoader(self, batch_size=32, testmode=False, max_imgs=None, nwork=0):
         fileDir = os.path.dirname(os.path.abspath(__file__))
         if fileDir.endswith("SLAC25"):
             trainDataPath = os.path.join(fileDir, "..", "data", "train_info.csv")
@@ -61,6 +61,15 @@ class Wrapper:
             train_factory = DataLoaderFactory(trainSubDataset, batch_size=5)
             test_factory = DataLoaderFactory(testSubDataset, batch_size=5)
             val_factory = DataLoaderFactory(valSubDataset, batch_size=5)
+        elif max_imgs is not None:
+            ntrain = int(.9*max_imgs)
+            ntest=max_imgs-ntrain
+            trainSubDataset = Subset(trainDataset, list(range(ntrain)))
+            testSubDataset = Subset(testDataset, list(range(ntest)))
+            valSubDataset = Subset(valDataset, list(range(ntest)))
+            train_factory = DataLoaderFactory(trainSubDataset,batch_size, num_workers=nwork)
+            test_factory = DataLoaderFactory(testSubDataset,  batch_size, num_workers=nwork)
+            val_factory = DataLoaderFactory(valSubDataset,    batch_size, num_workers=nwork)
         
         else:
             train_factory = DataLoaderFactory(trainDataset, batch_size)
@@ -153,7 +162,10 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
             start_time = time.time()
             nbatch = len(self.train_loader)
 
+            tall = time.time()
             for batch_idx, (images, labels) in enumerate(self.train_loader):
+                tbatch = time.time()
+
                 images, labels = images.to(self.device), labels.to(self.device)
                 self.optimizer.zero_grad() # zero the gradients
                 outputs = self.model(images) # forward pass
@@ -162,6 +174,7 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
                 self.optimizer.step() # update the weights
 
                 if self.verbose:
+                    print(f"size of batch={len(images)}")
                     print(f'Epoch: {epoch + 1}/{self.num_epochs} | Batch: {batch_idx + 1}/{nbatch} | Loss: {loss:.3f}')
                 
                 if loss is None or math.isnan(loss) or math.isinf(loss):
@@ -174,6 +187,10 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
                 _, predicted = outputs.max(1) # gets the class with the highest probability
                 total += labels.size(0)
                 correct += predicted.eq(labels).sum().item() # if the predicted label equals the actual label, add 1 to the correct
+                tbatch = time.time()-tbatch
+                print("Time bacth", tbatch)
+            tall = time.time()-tall
+            print("Time all:", tall)
                 
             
             if self.verbose:
