@@ -14,6 +14,8 @@ ap.add_argument("--outdir", type=str, default=None)
 ap.add_argument("--lr", type=float, default=0.001)
 ap.add_argument("--batch_size", type=int, default=32)
 ap.add_argument("--verbose", action="store_true", help="Enable verbose output")
+ap.add_argument("--maxImgs", type=int, help="maximum number of images to train on")
+ap.add_argument("--nwork", type=int, help="number of workers for loading images in parallel")
 args = ap.parse_args()
 
 if args.testmode: # if testmode, no need to specify outdir in slurmlogs
@@ -27,10 +29,10 @@ else:
             slurm_jname = os.environ['SLURM_JOB_NAME']
             username = os.environ['USER']
             args.outdir = f"/scratch/slac/models/{username}.{slurm_jname}.{slurm_jid}"
-            os.makedirs(args.outdir, exist_ok=True)
         except KeyError:
             args.outdir = "./models"
 
+os.makedirs(args.outdir, exist_ok=True)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -40,10 +42,12 @@ model_wrapper = ModelWrapper(model_class=model, num_classes=4, keep_prob=0.75, n
 
 # enable testmode for smaller sample size
 # enable verbose for detailed info
-model_wrapper._prepareDataLoader(batch_size=args.batch_size, testmode=args.testmode)
+model_wrapper._prepareDataLoader(batch_size=args.batch_size, testmode=args.testmode,
+                    max_imgs=args.maxImgs, nwork=args.nwork)
 
 # train the model
 train_log = model_wrapper.train()
 
 # visualize training performance
 visualize_performance(train_log, args.outdir, "train_log.png")
+
