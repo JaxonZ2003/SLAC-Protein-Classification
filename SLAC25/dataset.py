@@ -68,7 +68,7 @@ class ImageDataset(Dataset):
   
   def _loadConfig(self):
     package_root = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(package_root, "..", "config.json")
+    config_path = os.path.join(package_root, "SLAC25_config.json")
     config_path = os.path.abspath(config_path)
 
     with open(config_path, "r") as f:
@@ -153,5 +153,5 @@ if __name__ == "__main__":
   data_path = os.path.abspath(data_path)
   testData = ImageDataset(data_path, transform=None, config=None, recordTransform=True)
 
-  testData.visualizeAndSave(123)
+  testData.visualizeAndSave(120)
   # print(data_path)
