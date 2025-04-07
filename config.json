@@ -1,0 +1,7 @@
+{
+  "model": "BaselineCNN",
+  "num_classes": 4,
+  "keep_prob": 0.75,
+  "num_epochs": 10,
+  "batch_size": 32
+}

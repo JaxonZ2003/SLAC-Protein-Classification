@@ -18,11 +18,11 @@ from SLAC25.utils import split_train_val, evaluate_model, EarlyStopping
 from SLAC25.models import *
 
 class Wrapper:
-    def __init__(self, model, num_epochs=10, outdir='./models', verbose=False, testmode=False):
-        self.model = model
-        self.num_epochs = num_epochs
+    def __init__(self, config, outdir='./models', verbose=False, testmode=False):
+        self.model = None
+        self.num_epochs = config["num_epochs"]
         self.criterion = nn.CrossEntropyLoss() # internally computes the softmax so no need for it. 
-        self.optimizer = optim.Adam(self.model.parameters())
+        self.optimizer = optim.Adam(self.model.parameters(), lr=config["lr"])
         self.lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'min', factor=0.1, patience=5, min_lr=1e-6)
         self.EarlyStopping = EarlyStopping(patience=7, verbose=False)
         self.outdir = outdir
@@ -30,7 +30,7 @@ class Wrapper:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model.to(self.device)  # Move model to device
         self.testmode = testmode
-        self._prepareDataLoader()
+        self._prepareDataLoader(batch_size=config["batch_size"], testmode=testmode)
 
     def _prepareDataLoader(self, batch_size=32, testmode=False, max_imgs=None, nwork=0):
         fileDir = os.path.dirname(os.path.abspath(__file__))
@@ -86,23 +86,29 @@ class Wrapper:
 
 
 class ModelWrapper(Wrapper): # inherits from Wrapper class
-    def __init__(self, model_class, num_classes=4, keep_prob=0.75, num_epochs=10, outdir='./models', verbose=False, testmode=False):
+    def __init__(self, config, outdir='./models', verbose=False, testmode=False):
+        model_class = config["model"]
         # check first if the model_class is already an instantiated model
         if isinstance(model_class, nn.Module):
             model = model_class
             if verbose:
                 print("Using pre-instantiated model. num_classes and keep_prob are ignored.\n")
+
         else:
             if isinstance(model_class, str):
               if model_class=="BaselineCNN":
                  model_class = BaselineCNN
-            model = model_class(num_classes, keep_prob)
+            model = model_class(config["num_classes"], config["keep_prob"])
             
 
             #model = model_class(num_classes, keep_prob)
             if verbose:
-                print(f"Instantiating new model with num_classes={num_classes} and keep_prob={keep_prob}")
-        super().__init__(model, num_epochs, outdir, verbose, testmode)
+                print(f"Instantiating new model with num_classes={config["num_classes"]} and keep_prob={config["keep_prob"]}")
+
+        super().__init__(config, outdir, verbose, testmode)
+        self.model = model
+
+        assert isinstance(model, nn.Module), "Expected a PyTorch model"
         
     def summary(self):
         """
