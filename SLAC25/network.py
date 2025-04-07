@@ -32,7 +32,7 @@ class Wrapper:
         self.testmode = testmode
         self._prepareDataLoader()
 
-    def _prepareDataLoader(self, batch_size=32, testmode=False):
+    def _prepareDataLoader(self, batch_size=32, testmode=False, max_imgs=None, nwork=0):
         fileDir = os.path.dirname(os.path.abspath(__file__))
         if fileDir.endswith("SLAC25"):
             trainDataPath = os.path.join(fileDir, "..", "data", "train_info.csv")
@@ -61,10 +61,19 @@ class Wrapper:
             train_factory = DataLoaderFactory(trainSubDataset, batch_size=5)
             test_factory = DataLoaderFactory(testSubDataset, batch_size=5)
             val_factory = DataLoaderFactory(valSubDataset, batch_size=5)
+        elif max_imgs is not None:
+            ntrain = int(.9*max_imgs)
+            ntest=max_imgs-ntrain
+            trainSubDataset = Subset(trainDataset, list(range(ntrain)))
+            testSubDataset = Subset(testDataset, list(range(ntest)))
+            valSubDataset = Subset(valDataset, list(range(ntest)))
+            train_factory = DataLoaderFactory(trainSubDataset, batch_size, num_workers=nwork)
+            test_factory = DataLoaderFactory(testSubDataset, batch_size, num_workers=nwork)
+            val_factory = DataLoaderFactory(valSubDataset, batch_size, num_workers=nwork)
         
         else:
             train_factory = DataLoaderFactory(trainDataset, batch_size)
-            test_factory = DataLoaderFactory(testDataPath, batch_size)
+            test_factory = DataLoaderFactory(testDataset, batch_size)
             val_factory = DataLoaderFactory(valDataset, batch_size)
 
         train_factory.setSequentialSampler()
@@ -84,7 +93,13 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
             if verbose:
                 print("Using pre-instantiated model. num_classes and keep_prob are ignored.\n")
         else:
+            if isinstance(model_class, str):
+              if model_class=="BaselineCNN":
+                 model_class = BaselineCNN
             model = model_class(num_classes, keep_prob)
+            
+
+            #model = model_class(num_classes, keep_prob)
             if verbose:
                 print(f"Instantiating new model with num_classes={num_classes} and keep_prob={keep_prob}")
         super().__init__(model, num_epochs, outdir, verbose, testmode)
@@ -123,6 +138,7 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
         """
         if self.verbose:
             self.summary()
+            print("\n{:=^70}".format(" Training Started "))
 
         train_log = {
           'epoch': [],
@@ -130,6 +146,8 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
           'train_acc': [],
           'val_loss': [],
           'val_acc': [],
+          'test_loss': [], # added for testing function during each epoch
+          'test_acc': [],
           'learning_rates': [],
           'model_checkpoints': [],
           'time_per_epoch': []
@@ -139,38 +157,48 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
 
         # training loop
         for epoch in range(self.num_epochs):
+            print("\n{:-^70}".format(f" Epoch {epoch+1}/{self.num_epochs} "))
+            print("Training Phase:")
+            print(f"{'Batch':>10} {'Loss':>12} {'Accuracy':>12} {'Progress':>12}")
+            print("-" * 46)
             # Training phase
             self.model.train()
             running_loss = 0.0
             correct = 0
             total = 0
             start_time = time.time()
+            nbatch = len(self.train_loader)
 
+            #tall = time.time()
             for batch_idx, (images, labels) in enumerate(self.train_loader):
+                #tbatch = time.time()
+
                 images, labels = images.to(self.device), labels.to(self.device)
                 self.optimizer.zero_grad() # zero the gradients
                 outputs = self.model(images) # forward pass
                 loss = self.criterion(outputs, labels) # compute the loss
                 loss.backward() # backpropagation
                 self.optimizer.step() # update the weights
-
-                if self.verbose:
-                    print(f'Epoch: {epoch + 1}/{self.num_epochs} | Batch: {batch_idx + 1} | Loss: {loss:.3f}')
                 
                 if loss is None or math.isnan(loss) or math.isinf(loss):
-                    print(f"Error: Loss became undefined or infinite at Epoch: {epoch + 1} | Batch: {batch_idx + 1}.")
+                    print(f"Error: Loss became undefined or infinite at Epoch: {epoch + 1}/{self.num_epochs} | Batch: {batch_idx + 1}.")
                     print(f"Stopping training.")
-                    sys.exit(1)
+                    break
                 
                 # Update running stats
                 running_loss += loss.item() # extract the tensor and return a float
                 _, predicted = outputs.max(1) # gets the class with the highest probability
                 total += labels.size(0)
                 correct += predicted.eq(labels).sum().item() # if the predicted label equals the actual label, add 1 to the correct
-                
-            
-            if self.verbose:
-                print(f"{'-'*10} Training Epoch {epoch + 1} finished {'-'*10}")
+                #tbatch = time.time()-tbatch
+                #print("Time batch:", tbatch)
+            #tall = time.time()-tall
+            #print("Time all:", tall)
+                if self.verbose and batch_idx % 100 == 0:
+                        progress = f"{batch_idx+1}/{nbatch}"
+                        batch_acc = correct / total
+                        print(f"{batch_idx+1:>10d} {loss.item():>12.4f} {batch_acc:>12.4f} {progress:>12}")
+
             # Calculate epoch stats
             epoch_loss = running_loss / len(self.train_loader)
             epoch_acc = correct / total
@@ -179,8 +207,9 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
             train_log['train_acc'].append(epoch_acc)
 
             if self.verbose:
-                print(f"Training Epoch {epoch + 1} Average Loss: {epoch_loss} | Accuracy: {epoch_acc}")
-                print(f"{'-'*10} Start Validation {epoch + 1} {'-'*10}")
+                print("\nTraining Epoch Summary:")
+                print(f"Average Loss: {epoch_loss:.4f} | Accuracy: {epoch_acc:.4f}")
+                print("\n{:-^70}".format(" Validation Phase "))
 
             # After training phase: Validation phase
             self.model.eval()
@@ -210,8 +239,20 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
             train_log['val_acc'].append(val_acc)
 
             if self.verbose:
-                print(f"Validation {epoch + 1} Average Loss: {val_loss} | Accuracy: {val_acc}")
-                print(f"{'-'*20}")
+                print(f"Validation Results:")
+                print(f"Average Loss: {val_loss:.4f} | Accuracy: {val_acc:.4f}")
+                print("\n{:-^70}".format(" Testing Phase "))
+
+            # After validation phase: Test phase
+            test_results = self.test() # make a call to the test function, returns a dictionary
+            test_loss = test_results['test_loss']
+            test_acc = test_results['test_accuracy']
+            train_log['test_loss'].append(test_loss)
+            train_log['test_acc'].append(test_acc)
+
+            if self.verbose:
+                print(f"Testing Results:")
+                print(f"Average Loss: {test_loss:.4f} | Accuracy: {test_acc:.4f}")
 
             # update the learning rate
             train_log['learning_rates'].append(self.optimizer.param_groups[0]['lr'])
@@ -224,7 +265,7 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
             if val_loss < min_val_loss:
                 min_val_loss = val_loss
                 timeNow = datetime.now(pytz.timezone("America/Los_Angeles")).strftime("%Y%m%d%H%M%S")
-                model_name = os.path.join(self.outdir, f"BaselineCNN_{timeNow}_ep{epoch+1}.net")
+                model_name = os.path.join(self.outdir, f"ResNet_50_Transfer_Learning_{timeNow}_ep{epoch+1}.net")
                 save_file = os.path.abspath(model_name) 
                 try:
                     torch.save({
@@ -259,18 +300,20 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
                 self.EarlyStopping(val_loss, self.model)
                 if self.EarlyStopping.early_stop: # flag that is raised or not
                     print("Early stopping")
-                    sys.exit(1) # stop training
+                    break # stop training
 
             # save the train log to a file
             log_file = f"{self.outdir}/train_log.json"
             with open(log_file, "w") as f:
                 json.dump(train_log, f, indent=4)
 
-            print('Epoch {} - Train Loss: {:.4f}, Train Acc: {:.4f} - Val Loss: {:.4f}, Val Acc: {:.4f}, Minutes per epoch: {:.2f}'.format(epoch+1, epoch_loss, epoch_acc, val_loss, val_acc, time_per_epoch/60))
-        print('{} Training complete! {}'.format('-'*10, '-'*10))
+        # once training has finished, print finished
+        if self.verbose:
+            print("\n{:=^70}".format(" Training Complete "))
         return train_log
     
     def test(self):
+        # set model to eval mode so we dont update the weights
         test_loss, test_acc = evaluate_model(self.model, self.test_loader, self.criterion, self.device)
         
         # save as a dictionary
@@ -293,8 +336,7 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
         # save the full log to a file
         with open(log_file, "w") as f:
             json.dump(full_log, f, indent=4)
-
-        print(f'Test Loss: {test_loss:.4f}, Test Accuracy: {test_acc:.4f}')
+            
         return test_log
 
 
