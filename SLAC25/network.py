@@ -5,110 +5,90 @@ import sys
 import math
 import time
 import pytz
+import tempfile
 import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
 from torch.utils.data import Subset
 from torchmetrics import AUROC
 from datetime import datetime
+from ray import tune
+from ray.tune import Checkpoint
 
 from SLAC25.dataset import ImageDataset
 from SLAC25.dataloader import DataLoaderFactory
-from SLAC25.utils import split_train_val, evaluate_model, EarlyStopping
+from SLAC25.utils import split_train_val, evaluate_model, EarlyStopping, find_data_path
 from SLAC25.models import *
 
 class Wrapper:
-    def __init__(self, config, outdir='./models', verbose=False, testmode=False):
-        self.model = None
-        self.num_epochs = config["num_epochs"]
-        self.criterion = nn.CrossEntropyLoss() # internally computes the softmax so no need for it. 
-        self.optimizer = optim.Adam(self.model.parameters(), lr=config["lr"])
-        self.lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'min', factor=0.1, patience=5, min_lr=1e-6)
-        self.EarlyStopping = EarlyStopping(patience=7, verbose=False)
-        self.outdir = outdir
+    def __init__(self, model, outdir='./models', verbose=False, testmode=False):
+        self.model = model
+        # self.num_epochs = config["num_epochs"]
         self.verbose = verbose
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model.to(self.device)  # Move model to device
         self.testmode = testmode
-        self._prepareDataLoader(batch_size=config["batch_size"], testmode=testmode)
+        self.outdir = outdir
+        self.criterion = nn.CrossEntropyLoss() # internally computes the softmax so no need for it. 
+        # self.optimizer = optim.Adam(self.model.parameters(), lr=config["lr"])
+        # self.lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'min', factor=0.1, patience=5, min_lr=1e-6)
+        self.EarlyStopping = EarlyStopping(patience=7, verbose=False)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # self._prepareDataLoader(batch_size=config["batch_size"], testmode=self.testmode)
+
+
+class ModelWrapper(Wrapper): # inherits from Wrapper class
+    def __init__(self, model, outdir='./models', verbose=False, testmode=False):
+        # check first if the model_class is already an instantiated model
+        super().__init__(model=None, outdir=outdir, verbose=verbose, testmode=testmode)
+        self._init_model(model)
+
+    def _init_model(self, model):
+        if isinstance(model, nn.Module):
+            if self.verbose:
+                print("Using pre-instantiated model. num_classes and keep_prob are ignored.\n")
+                  
+        elif isinstance(model, str):
+            if model == "BaselineCNN":
+                model = BaselineCNN(num_classes=4, keep_prob=0.75)
+                if self.verbose:
+                    print(f"Instantiating new model with num_classes={model.num_classes} and keep_prob={model.keep_prob}")
+        
+        else:
+            raise ValueError("model can either be a nn.Module or a pre-stated string.")
+
+        assert isinstance(model, nn.Module), "Expected a PyTorch model"
+        self.model = model
+        self.model.to(self.device)  # Move model to device
 
     def _prepareDataLoader(self, batch_size=32, testmode=False, max_imgs=None, nwork=0):
         fileDir = os.path.dirname(os.path.abspath(__file__))
-        if fileDir.endswith("SLAC25"):
-            trainDataPath = os.path.join(fileDir, "..", "data", "train_info.csv")
-            testDataPath = os.path.join(fileDir, "..", "data", "test_info.csv")
-            valDataPath = os.path.join(fileDir, "..", "data", "val_info.csv")
-            trainDataPath = os.path.abspath(trainDataPath)
-            testDataPath = os.path.abspath(testDataPath)
-            valDataPath = os.path.abspath(valDataPath)
+        dataPaths = find_data_path(fileDir)
         
-        elif fileDir.endswith("capstone-SLAC"):
-            trainDataPath = os.path.join(fileDir, "data", "train_info.csv")
-            testDataPath = os.path.join(fileDir, "data", "test_info.csv")
-            valDataPath = os.path.join(fileDir, "data", "val_info.csv")
-            trainDataPath = os.path.abspath(trainDataPath)
-            testDataPath = os.path.abspath(testDataPath)
-            valDataPath = os.path.abspath(valDataPath)
-        
-        trainDataset = ImageDataset(trainDataPath)
-        testDataset = ImageDataset(testDataPath)
-        valDataset = ImageDataset(valDataPath)
+        trainDataset = ImageDataset(dataPaths[0])
+        testDataset = ImageDataset(dataPaths[1])
+        valDataset = ImageDataset(dataPaths[2])
 
         if testmode: # take only first 50 data
-            trainSubDataset = Subset(trainDataset, list(range(50)))
-            testSubDataset = Subset(testDataset, list(range(10)))
-            valSubDataset = Subset(valDataset, list(range(10)))
-            train_factory = DataLoaderFactory(trainSubDataset, batch_size=5)
-            test_factory = DataLoaderFactory(testSubDataset, batch_size=5)
-            val_factory = DataLoaderFactory(valSubDataset, batch_size=5)
+            trainDataset = Subset(trainDataset, list(range(50)))
+            testDataset = Subset(testDataset, list(range(10)))
+            valDataset = Subset(valDataset, list(range(10)))
+            batch_size = 5
+
         elif max_imgs is not None:
-            ntrain = int(.9*max_imgs)
-            ntest=max_imgs-ntrain
-            trainSubDataset = Subset(trainDataset, list(range(ntrain)))
-            testSubDataset = Subset(testDataset, list(range(ntest)))
-            valSubDataset = Subset(valDataset, list(range(ntest)))
-            train_factory = DataLoaderFactory(trainSubDataset, batch_size, num_workers=nwork)
-            test_factory = DataLoaderFactory(testSubDataset, batch_size, num_workers=nwork)
-            val_factory = DataLoaderFactory(valSubDataset, batch_size, num_workers=nwork)
+            ntrain = int(.9 * max_imgs)
+            ntest = max_imgs - ntrain
+            trainDataset = Subset(trainDataset, list(range(ntrain)))
+            testDataset = Subset(testDataset, list(range(ntest)))
+            valDataset = Subset(valDataset, list(range(ntest)))
         
-        else:
-            train_factory = DataLoaderFactory(trainDataset, batch_size)
-            test_factory = DataLoaderFactory(testDataset, batch_size)
-            val_factory = DataLoaderFactory(valDataset, batch_size)
+        train_factory = DataLoaderFactory(trainDataset, batch_size, num_workers=nwork)
+        test_factory = DataLoaderFactory(testDataset, batch_size, num_workers=nwork)
+        val_factory = DataLoaderFactory(valDataset, batch_size, num_workers=nwork)
 
         train_factory.setSequentialSampler()
         test_factory.setSequentialSampler()
         val_factory.setSequentialSampler()
 
-        self.train_loader = train_factory.outputDataLoader()
-        self.test_loader = test_factory.outputDataLoader()
-        self.val_loader = val_factory.outputDataLoader()
-
-
-class ModelWrapper(Wrapper): # inherits from Wrapper class
-    def __init__(self, config, outdir='./models', verbose=False, testmode=False):
-        model_class = config["model"]
-        # check first if the model_class is already an instantiated model
-        if isinstance(model_class, nn.Module):
-            model = model_class
-            if verbose:
-                print("Using pre-instantiated model. num_classes and keep_prob are ignored.\n")
-
-        else:
-            if isinstance(model_class, str):
-              if model_class=="BaselineCNN":
-                 model_class = BaselineCNN
-            model = model_class(config["num_classes"], config["keep_prob"])
-            
-
-            #model = model_class(num_classes, keep_prob)
-            if verbose:
-                print(f"Instantiating new model with num_classes={config["num_classes"]} and keep_prob={config["keep_prob"]}")
-
-        super().__init__(config, outdir, verbose, testmode)
-        self.model = model
-
-        assert isinstance(model, nn.Module), "Expected a PyTorch model"
+        return (train_factory.outputDataLoader(), test_factory.outputDataLoader(), val_factory.outputDataLoader())
         
     def summary(self):
         """
@@ -138,10 +118,14 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
             print("{} NOTE: MODEL IS RUNNING IN TEST MODE {}".format('-'*10, '-'*10))
         print('{:#^70}'.format(''))
     
-    def train(self):
+    def train(self, config):
         """
         Train the model.
         """
+        print("CONFIG:", config)
+
+        train_loader, test_loader, val_loader = self._prepareDataLoader()
+        
         if self.verbose:
             self.summary()
             print("\n{:=^70}".format(" Training Started "))
@@ -287,6 +271,17 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
                     print("New best model saved to {}".format(save_file))
                 except Exception as e:
                     print("Error saving model: {}".format(e))
+            
+            with tempfile.TemporaryDirectory() as temp_checkpoint_dir:
+                checkpoint = None
+                if (epoch + 1) % 5 == 0:
+                    torch.save(
+                        self.model.state_dir(),
+                        os.path.join(temp_checkpoint_dir, "model.pth")
+                    )
+                    checkpoint = Checkpoint.from_directory(temp_checkpoint_dir)
+
+                tune.report({"mean_accuracy": val_acc}, checkpoint=checkpoint)
             
             
             ##### Learning Rate Scheduler #####
