@@ -20,7 +20,7 @@ def create_fake_data():
         img = Image.new("RGB", (64, 64), color=(i * 25, i * 25, i * 25))
         img_path = os.path.join(image_dir, f"image_{i}.png")
         img.save(img_path)
-        # Create a fake label
+        # labels
         labels.append({"image_path": img_path, "label_id": i % 4})  
 
     # Save labels to a CSV file
@@ -87,7 +87,45 @@ def test_subset_random_sampler():
     mock_training_loop(dataloader)
     print("Subset random sampler test passed successfully.")
 
+# Test for weighted sampler
+def test_weighted_sampler():
+    labels_csv_path = create_fake_data()
+    dataset = ImageDataset(labels_csv_path)
+    factory = DataLoaderFactory(
+        dataset=dataset,
+        batch_size=4,
+        num_workers=0,
+        pin_memory=False,
+        drop_last=False
+    )
+    # Create a uniform weights list for each data point in the dataset
+    weights = [1.0] * len(dataset)
+    factory.setWeightedRandomSampler(weights, num_samples=len(dataset), replacement=True)
+    dataloader = factory.outputDataLoader()
+    mock_training_loop(dataloader)
+    print("Weighted sampler test passed successfully.")
+
+# Test for stratified sampler
+def test_stratified_sampler():
+    labels_csv_path = create_fake_data()
+    dataset = ImageDataset(labels_csv_path)
+    factory = DataLoaderFactory(
+        dataset=dataset,
+        batch_size=4,
+        num_workers=0,
+        pin_memory=False,
+        drop_last=False
+    )
+    # Sample 1 item per label group; the group is determined by 'label_id'
+    factory.setStratifiedSampler(samplePerGroup=1)
+    dataloader = factory.outputDataLoader()
+    mock_training_loop(dataloader)
+    print("Stratified sampler test passed successfully.")
+
+
 if __name__ == "__main__":
     test_random_sampler()
     test_sequential_sampler()
     test_subset_random_sampler()
+    test_weighted_sampler()
+    test_stratified_sampler()
