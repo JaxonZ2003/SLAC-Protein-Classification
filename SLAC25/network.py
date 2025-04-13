@@ -31,11 +31,12 @@ class Wrapper:
         self.criterion = nn.CrossEntropyLoss() # internally computes the softmax so no need for it. 
         self.lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'min', factor=0.1, patience=5, min_lr=1e-6)
         self.EarlyStopping = EarlyStopping(patience=7, verbose=False)
-        self._prepareDataLoader(batch_size=batch_size, testmode=testmode)
         
         self.verbose = verbose
         self.testmode = testmode
         self.outdir = outdir
+        
+        self._prepareDataLoader(batch_size=batch_size)
         
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model.to(self.device)  # Move model to device
@@ -81,10 +82,10 @@ class Trainable(tune.Trainable):
     def setup(self, config):
         self.num_epochs = config["num_epochs"]
         self.lr = config["lr"]
+        self.model = self._init_model(config["model"], config["num_classes"], config["keep_prob"])
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
         self.batchsize = config["batch_size"]
 
-        self.model = self._init_model(config["model"], config["num_classes"], config["keep_prob"])
 
         self.outdir = config["outdir"]
         self.verbose = config["verbose"]
