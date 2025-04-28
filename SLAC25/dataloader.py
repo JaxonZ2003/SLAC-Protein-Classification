@@ -9,7 +9,7 @@ from PIL import Image
 
 
 class DataLoaderFactory:
-    def __init__(self, dataset, batch_size=32, num_workers=0, pin_memory=False, drop_last=False):
+    def __init__(self, dataset, batch_size=32, num_workers=8, pin_memory=False, drop_last=False, shuffle=False):
         """
         Initializes the DataLoader for the dataset.
 
@@ -26,6 +26,7 @@ class DataLoaderFactory:
         self.pin_memory = pin_memory
         self.drop_last = drop_last
         self.sampler = None
+        self.shuffle = shuffle
 
         self.setBatchSize(batch_size)
         self.setNumWorkers(num_workers)
@@ -55,7 +56,7 @@ class DataLoaderFactory:
     def setSequentialSampler(self):
         self.sampler = SequentialSampler(self.dataset)
     
-    def setSubsetRandomSampler(self, indices, generator=None):
+    def setSubsetRandomSampler(self, indices, generator=None, seed=1):
         if indices is None:
             raise ValueError("Indices are required for subset sampling.")
         
@@ -87,7 +88,8 @@ class DataLoaderFactory:
                           sampler=self.sampler,
                           num_workers=self.num_workers,
                           pin_memory=self.pin_memory,
-                          drop_last=self.drop_last)
+                          drop_last=self.drop_last,
+                          shuffle=self.shuffle)
 
     # def _create_sampler(self, sampler_type, weights, indices):
     #     """

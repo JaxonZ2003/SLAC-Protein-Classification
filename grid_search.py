@@ -2,14 +2,16 @@ import ray
 
 from ray import tune
 from ray.tune.schedulers import ASHAScheduler
-from ray.tune.stopper import TrialPlateauStopper
-from ray.tune import Tuner, TuneConfig, RunConfig
+from ray.tune.stopper import TrialPlateauStopper, MaximumIterationStopper
+from ray.tune import Tuner, TuneConfig, RunConfig, CheckpointConfig
 from ray.tune.execution.placement_groups import PlacementGroupFactory
 
 
 from SLAC25.utils import *
 from SLAC25.network import Trainable
 from SLAC25.models import * # import the model
+
+teststopper = MaximumIterationStopper(1)
 
 stopper = TrialPlateauStopper(
   metric="val_loss",
@@ -22,17 +24,30 @@ stopper = TrialPlateauStopper(
 search_space = {
   "model": "BaselineCNN",
   "num_classes": 4,
-  "keep_prob": tune.choice([0.75]),
-  "num_epochs": tune.choice([3]),
-  "lr": tune.choice([0.001, 0.01]),
+  "keep_prob": tune.grid_search([0.75]),
+  "num_epochs": -1,
+  "lr": tune.grid_search([0.001, 0.01]),
   "batch_size": 32,
-  "verbose": True,
-  "testmode": True,
-  "outdir": "./models"
+  "verbose": False,
+  "testmode": False,
+  "outdir": "./models",
+  "tune": True,
+  "seed": 1
 }
 
 # ray.init(address="auto")
 ray.init()
+
+# run_cfg = air.RunConfig(
+#     name="my_exp",
+#     storage_path="/scratch/jaxon/ray_out",   # base dir (optional)
+#     checkpoint_config=air.CheckpointConfig(
+#         # ↓  write ONLY at the *very end*
+#         checkpoint_frequency=0,
+#         checkpoint_at_end=True,
+#         num_to_keep=1,                       # keep one file max
+#     )
+# )
 
 trainable_with_resources = tune.with_resources(
     Trainable,
@@ -45,11 +60,18 @@ tuner = Tuner(
   tune_config=TuneConfig(
     metric="val_accuracy",
     mode="max",
-    num_samples=2,
-    reuse_actors=True,
+    num_samples=1, # if grid_search, keep it one if wanna run all combination
+    reuse_actors=False,
   ),
   run_config=RunConfig(
-    stop=stopper,
+    stop=teststopper,
+    storage_path="/scratch/jaxon/ray_out",
+    checkpoint_config=CheckpointConfig(
+    # ↓  write ONLY at the *very end*
+    checkpoint_frequency=0,
+    checkpoint_at_end=True,
+    num_to_keep=1,                       # keep one file max
+    )
   ),
 )
 
@@ -57,5 +79,8 @@ results = tuner.fit()
 best_result = results.get_best_result("val_accuracy", mode="max")
 best_config = best_result.config
 print("Best config:", best_config)
+
+
+print("Files are in:", best_result.checkpoint.to_directory())
 
 ray.shutdown()

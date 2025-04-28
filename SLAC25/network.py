@@ -6,9 +6,12 @@ import math
 import time
 import pytz
 import tempfile
+import gc
+import random
 import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
+import numpy as np
 from torch.utils.data import Subset
 from torchmetrics import AUROC
 from datetime import datetime
@@ -24,23 +27,35 @@ class Wrapper:
     """
     General class that applies to all models
     """
-    def __init__(self, model, num_epochs, optimizer, batch_size, outdir='./models', verbose=False, testmode=False):
+    def __init__(self, model, num_epochs, optimizer, batch_size, outdir='./models', verbose=False, testmode=False, tune=False, seed=1):
         self.model = model
-        self.num_epochs = num_epochs
+        self.num_epochs = None if (num_epochs < 0) else num_epochs
         self.optimizer = optimizer
         self.criterion = nn.CrossEntropyLoss() # internally computes the softmax so no need for it. 
         self.lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'min', factor=0.1, patience=5, min_lr=1e-6)
-        self.EarlyStopping = EarlyStopping(patience=7, verbose=False)
+        self.EarlyStopping = None # EarlyStopping(patience=7, verbose=False)
+        self.tune = tune
+        self.seed = seed
         
         self.verbose = verbose
         self.testmode = testmode
         self.outdir = outdir
         
+        self._set_seed()
         self._prepareDataLoader(batch_size=batch_size)
         
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model.to(self.device)  # Move model to device
     
+    def _set_seed(self):
+        if self.tune:
+            random.seed(self.seed)
+            np.random.seed(self.seed)
+            torch.manual_seed(self.seed)
+            torch.cuda.manual_seed_all(self.seed)
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark     = False
+
     def _prepareDataLoader(self, batch_size=32, max_imgs=None, nwork=0):
         fileDir = os.path.dirname(os.path.abspath(__file__))
         dataPaths = find_data_path(fileDir)
@@ -49,30 +64,55 @@ class Wrapper:
         testDataset = ImageDataset(dataPaths[1])
         valDataset = ImageDataset(dataPaths[2])
 
-        if self.testmode: # take only first 50 data
+        if self.testmode is True: # take only first 50 data
             trainDataset = Subset(trainDataset, list(range(50)))
             testDataset = Subset(testDataset, list(range(10)))
             valDataset = Subset(valDataset, list(range(10)))
             batch_size = 5
 
-        elif max_imgs is not None:
-            ntrain = int(.9 * max_imgs)
-            ntest = max_imgs - ntrain
-            trainDataset = Subset(trainDataset, list(range(ntrain)))
-            testDataset = Subset(testDataset, list(range(ntest)))
-            valDataset = Subset(valDataset, list(range(ntest)))
+        elif self.tune is True:
+            g = torch.Generator()
+            g.manual_seed(self.seed)
+
+            N_TOTAL = len(trainDataset)
+            N_TRAIN = 3000               
+            N_VAL   = 1000                  
+            assert N_TRAIN + N_VAL <= N_TOTAL, "requested split larger than datas"
+
+            perm = torch.randperm(N_TOTAL, generator=g)
+            train_idx = perm[:N_TRAIN].tolist()
+            val_idx   = perm[N_TRAIN:N_TRAIN + N_VAL].tolist()
+            
+            # subset_indices = torch.randperm(len(trainDataset), generator=g)[:N_SAMPLES].tolist()
+
+        else:
+            if max_imgs is not None:
+                ntrain = int(.9 * max_imgs)
+                ntest = max_imgs - ntrain
+                trainDataset = Subset(trainDataset, list(range(ntrain)))
+                testDataset = Subset(testDataset, list(range(ntest)))
+                valDataset = Subset(valDataset, list(range(ntest)))
         
-        train_factory = DataLoaderFactory(trainDataset, batch_size, num_workers=nwork)
-        test_factory = DataLoaderFactory(testDataset, batch_size, num_workers=nwork)
-        val_factory = DataLoaderFactory(valDataset, batch_size, num_workers=nwork)
+        train_factory = DataLoaderFactory(trainDataset, batch_size, num_workers=nwork, shuffle=False)
+        test_factory = DataLoaderFactory(testDataset, batch_size, num_workers=nwork, shuffle=False)
+        val_factory = DataLoaderFactory(valDataset, batch_size, num_workers=nwork, shuffle=False)
 
-        train_factory.setSequentialSampler()
-        test_factory.setSequentialSampler()
-        val_factory.setSequentialSampler()
 
-        self.train_loader = train_factory.outputDataLoader()
-        self.test_loader = test_factory.outputDataLoader() 
-        self.val_loader = val_factory.outputDataLoader()
+        if self.tune is True:
+            train_factory.setSubsetRandomSampler(train_idx, generator=g)
+            val_factory.setSubsetRandomSampler(val_idx, generator=g)
+
+            self.train_loader = train_factory.outputDataLoader()
+            self.val_loader = val_factory.outputDataLoader()
+
+        else:
+            train_factory.setSequentialSampler()
+            test_factory.setSequentialSampler()
+            val_factory.setSequentialSampler()
+
+            self.train_loader = train_factory.outputDataLoader()
+            self.test_loader = test_factory.outputDataLoader() 
+            self.val_loader = val_factory.outputDataLoader()
 
 
 class Trainable(tune.Trainable):
@@ -90,6 +130,7 @@ class Trainable(tune.Trainable):
         self.outdir = config["outdir"]
         self.verbose = config["verbose"]
         self.testmode = config["testmode"]
+        self.seed = config["seed"]
 
         self.wrapper = ModelWrapper(self.model,
                                     self.num_epochs,
@@ -97,7 +138,11 @@ class Trainable(tune.Trainable):
                                     self.batchsize,
                                     self.outdir,
                                     self.verbose,
-                                    self.testmode)
+                                    self.testmode,
+                                    self.seed)
+
+        self.best_loss= float("inf")
+        self.best_state = None
 
         
     def _init_model(self, model, num_classes, keep_prob):
@@ -119,7 +164,32 @@ class Trainable(tune.Trainable):
     def step(self):
         self.wrapper._train_one_epoch()
         val_acc, val_loss = self.wrapper._val_one_epoch()
+        val_acc = float(val_acc)
+        val_loss = float(val_loss)
+
+        if val_loss < self.best_loss:
+            self.best_loss = val_loss
+            self.best_state = {
+                "model": self.model.state_dict(),
+                "optim": self.optimizer.state_dict(),
+                "epoch": self.iteration,
+            }
+
         return {"val_accuracy": val_acc, "val_loss": val_loss}
+        # finally:
+        #     del self.model
+        #     del self.optimizer
+        #     gc.collect()
+        #     torch.cuda.empty_cache()
+        
+    def save_checkpoint(self, chkpt_dir):
+        """
+        Ray calls this exactly once at the *end* (because of
+        checkpoint_at_end=True).  Now we finally write our best model.
+        """
+        path = os.path.join(chkpt_dir, "best.pt")
+        torch.save(self.best_state, path)
+        return chkpt_dir       # Ray handles the directory
     
     def reset_config(self, new_config):
         self.config = new_config
@@ -128,8 +198,8 @@ class Trainable(tune.Trainable):
 
     
 class ModelWrapper(Wrapper): # inherits from Wrapper class
-    def __init__(self, model, num_epochs, optimizer, batch_size, outdir='./models', verbose=False, testmode=False):
-        super().__init__(model, num_epochs, optimizer, batch_size, outdir=outdir, verbose=verbose, testmode=testmode)
+    def __init__(self, model, num_epochs, optimizer, batch_size, outdir='./models', verbose=False, testmode=False, tune=False, seed=1):
+        super().__init__(model, num_epochs, optimizer, batch_size, outdir=outdir, verbose=verbose, testmode=testmode, tune=tune, seed=seed)
         self._verbose_printer(style="setup_header")
         self.current_epoch = 0
         self.train_log = {
@@ -217,7 +287,7 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
         print(f"TEST MODE: {self.testmode}")
         print(f"VERBOSE: {self.verbose}")
         print(f"OPTIMIZER: {self.optimizer.__class__.__name__}, INITIAL LR: {self.optimizer.param_groups[0]['lr']}")
-        print(f"EARLY STOPPING: Enabled (patience={self.EarlyStopping.patience})")
+        # print(f"EARLY STOPPING: Enabled (patience={self.EarlyStopping.patience})")
         print(f"LEARNING RATE SCHEDULER: Enabled (patience={self.lr_scheduler.patience}, factor={self.lr_scheduler.factor})")
         if self.testmode:
             print("{} NOTE: MODEL IS RUNNING IN TEST MODE {}".format('-'*10, '-'*10))
@@ -311,7 +381,7 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
 
         self._verbose_printer(style="val_report", val_report=val_report)
 
-        if val_loss < min_val_loss:
+        if not self.testmode and val_loss < min_val_loss:
             min_val_loss = val_loss
             timeNow = datetime.now(pytz.timezone("America/Los_Angeles")).strftime("%Y%m%d%H%M%S")
             model_name = os.path.join(self.outdir, f"ResNet_50_Transfer_Learning_{timeNow}_ep{self.current_epoch}.net")
