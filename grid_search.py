@@ -1,46 +1,86 @@
 import ray
-import json
 
-from ray import tune, air
+from ray import tune
 from ray.tune.schedulers import ASHAScheduler
-from ray.tune.tuner import Tuner
+from ray.tune.stopper import TrialPlateauStopper, MaximumIterationStopper
+from ray.tune import Tuner, TuneConfig, RunConfig, CheckpointConfig
+from ray.tune.execution.placement_groups import PlacementGroupFactory
+
 
 from SLAC25.utils import *
-from SLAC25.network import ModelWrapper
+from SLAC25.network import Trainable
 from SLAC25.models import * # import the model
 
-with open('config.json', 'r') as f:
-  raw_config = json.load(f)
+teststopper = MaximumIterationStopper(1)
 
-# print(raw_config)
+stopper = TrialPlateauStopper(
+  metric="val_loss",
+  std=0.001, # minimum improvement threshold
+  num_results=3, # stop if 3 trials w/o any improvement consecutively
+  grace_period=5, # min number of steps befor it can stop
+  mode="min" 
+)
 
 search_space = {
-  "model": tune.grid_search(raw_config["model"]),
-  "num_classes": tune.grid_search(raw_config["num_classes"]),
-  "keep_prob": tune.grid_search(raw_config["keep_prob"]),
-  "num_epochs": tune.grid_search(raw_config["num_epochs"]),
-  "batch_size": tune.grid_search(raw_config["batch_size"]),
-  "verbose": tune.grid_search(raw_config["verbose"]),
-  "testmode": tune.grid_search(raw_config["testmode"]),
+  "model": "BaselineCNN",
+  "num_classes": 4,
+  "keep_prob": tune.grid_search([0.75]),
+  "num_epochs": -1,
+  "lr": tune.grid_search([0.001, 0.01]),
+  "batch_size": 32,
+  "verbose": False,
+  "testmode": False,
+  "outdir": "./models",
+  "tune": True,
+  "seed": 1
 }
 
 # ray.init(address="auto")
 ray.init()
 
-model = ResNet(num_classes=4, keep_prob=0.75)
+# run_cfg = air.RunConfig(
+#     name="my_exp",
+#     storage_path="/scratch/jaxon/ray_out",   # base dir (optional)
+#     checkpoint_config=air.CheckpointConfig(
+#         # ↓  write ONLY at the *very end*
+#         checkpoint_frequency=0,
+#         checkpoint_at_end=True,
+#         num_to_keep=1,                       # keep one file max
+#     )
+# )
 
-model_wrapper = ModelWrapper(model, verbose=True, testmode=True)
+trainable_with_resources = tune.with_resources(
+    Trainable,
+    resources=PlacementGroupFactory([{"CPU": 2, "GPU": 1}])
+)
+
 tuner = Tuner(
-  model_wrapper.train,
+  trainable_with_resources,
   param_space=search_space,
-  tune_config=tune.TuneConfig(max_concurrent_trials=2),
-  # run_config=air.RunConfig(resources_per_trial={"cpu": 2, "gpu": 1})
+  tune_config=TuneConfig(
+    metric="val_accuracy",
+    mode="max",
+    num_samples=1, # if grid_search, keep it one if wanna run all combination
+    reuse_actors=False,
+  ),
+  run_config=RunConfig(
+    stop=teststopper,
+    storage_path="/scratch/jaxon/ray_out",
+    checkpoint_config=CheckpointConfig(
+    # ↓  write ONLY at the *very end*
+    checkpoint_frequency=0,
+    checkpoint_at_end=True,
+    num_to_keep=1,                       # keep one file max
+    )
+  ),
 )
 
 results = tuner.fit()
-best_result = results.get_best_result("mean_accuracy", mode="max")
+best_result = results.get_best_result("val_accuracy", mode="max")
+best_config = best_result.config
+print("Best config:", best_config)
 
-with best_result.checkpoint.as_directory() as checkpoint_dir:
-  pass
 
-print(ray.__version__)
+print("Files are in:", best_result.checkpoint.to_directory())
+
+ray.shutdown()
