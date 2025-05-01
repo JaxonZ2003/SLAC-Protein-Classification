@@ -143,7 +143,6 @@ class Trainable(tune.Trainable):
 
         self.best_loss= float("inf")
         self.best_state = None
-
         
     def _init_model(self, model, num_classes, keep_prob):
         if isinstance(model, nn.Module):
@@ -422,8 +421,6 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
                 sys.exit(1)
         
         return val_acc, val_loss
-
-
 
     def train(self):
         """

@@ -1,8 +1,9 @@
 import ray
+import shutil
 
 from ray import tune
 from ray.tune.schedulers import ASHAScheduler
-from ray.tune.stopper import TrialPlateauStopper, MaximumIterationStopper
+from ray.tune.stopper import TrialPlateauStopper, MaximumIterationStopper, CombinedStopper
 from ray.tune import Tuner, TuneConfig, RunConfig, CheckpointConfig
 from ray.tune.execution.placement_groups import PlacementGroupFactory
 
@@ -11,15 +12,17 @@ from SLAC25.utils import *
 from SLAC25.network import Trainable
 from SLAC25.models import * # import the model
 
-teststopper = MaximumIterationStopper(1)
+maxIterStopper = MaximumIterationStopper(10)
 
-stopper = TrialPlateauStopper(
+trailPlateauStoper = TrialPlateauStopper(
   metric="val_loss",
   std=0.001, # minimum improvement threshold
   num_results=3, # stop if 3 trials w/o any improvement consecutively
   grace_period=5, # min number of steps befor it can stop
   mode="min" 
 )
+
+combinedStopper = CombinedStopper(maxIterStopper, trailPlateauStoper)
 
 search_space = {
   "model": "BaselineCNN",
@@ -29,25 +32,13 @@ search_space = {
   "lr": tune.grid_search([0.001, 0.01]),
   "batch_size": 32,
   "verbose": False,
-  "testmode": False,
+  "testmode": True,
   "outdir": "./models",
-  "tune": True,
+  "tune": False,
   "seed": 1
 }
 
-# ray.init(address="auto")
 ray.init()
-
-# run_cfg = air.RunConfig(
-#     name="my_exp",
-#     storage_path="/scratch/jaxon/ray_out",   # base dir (optional)
-#     checkpoint_config=air.CheckpointConfig(
-#         # ↓  write ONLY at the *very end*
-#         checkpoint_frequency=0,
-#         checkpoint_at_end=True,
-#         num_to_keep=1,                       # keep one file max
-#     )
-# )
 
 trainable_with_resources = tune.with_resources(
     Trainable,
@@ -64,10 +55,10 @@ tuner = Tuner(
     reuse_actors=False,
   ),
   run_config=RunConfig(
-    stop=teststopper,
-    storage_path="/scratch/jaxon/ray_out",
+    stop=combinedStopper,
+    storage_path="~/ray_out",
     checkpoint_config=CheckpointConfig(
-    # ↓  write ONLY at the *very end*
+    #  write ONLY at the *very end*
     checkpoint_frequency=0,
     checkpoint_at_end=True,
     num_to_keep=1,                       # keep one file max
@@ -80,7 +71,9 @@ best_result = results.get_best_result("val_accuracy", mode="max")
 best_config = best_result.config
 print("Best config:", best_config)
 
+save_dir = "~/best_model_checkpoint"
 
-print("Files are in:", best_result.checkpoint.to_directory())
+
+print("Files are in:", best_result.checkpoint.to_directory(save_dir))
 
 ray.shutdown()
