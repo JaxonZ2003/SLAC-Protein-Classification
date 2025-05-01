@@ -6,6 +6,11 @@ from SLAC25.models import * # import the model
 from argparse import ArgumentParser
 from datetime import datetime
 
+# hyperparam tuning
+from ray import tune
+from ray.tune.schedulers import HyperBandScheduler
+from ray.tune.utils.mock_trainable import MyTrainableClass
+
 
 now = datetime.now()
 timestamp = now.strftime("%Y%m%d%H%M%S")
@@ -43,6 +48,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # create a model wrapper
 model = ResNet
+model.transfer_learn()
 model_wrapper = ModelWrapper(model_class=model, 
                              num_classes=4, 
                              keep_prob=0.75, 
@@ -56,8 +62,13 @@ model_wrapper = ModelWrapper(model_class=model,
 model_wrapper._prepareDataLoader(batch_size=args.batch_size, testmode=args.testmode,
                     max_imgs=args.maxImgs, nwork=args.nwork)
 
-# train the model
-train_log = model_wrapper.train() # this already includes testing
+# create ray tune experiment
+grid_search = {
+    'batch_size': [32, 64, 128],
+    'nepoch': [10, 20, 30],
+    'keep_prob': [0.5, 0.75, 1.0],
+    'hidden_dim': [128, 256, 512],
+}
 
 plot_name = f"{timestamp}_train_log.png"
 # visualize training performance
