@@ -144,15 +144,20 @@ class Trainable(tune.Trainable):
         self.best_loss= float("inf")
         self.best_state = None
         
-    def _init_model(self, model, num_classes, keep_prob):
+    def _init_model(self, model, num_classes, keep_prob, hidden_dim=256):
         if isinstance(model, nn.Module):
             print("Using pre-instantiated model. num_classes and keep_prob are ignored.\n")
                   
         elif isinstance(model, str):
             if model == "BaselineCNN":
                 model = BaselineCNN(num_classes, keep_prob)
-                print(f"Instantiating new model with num_classes={model.num_classes} and keep_prob={model.keep_prob}")
-        
+                print(f"Instantiating BaselineCNN with num_classes={model.num_classes} and keep_prob={model.keep_prob}")
+
+            if model == "ResNet":
+                model = ResNet(num_classes, keep_prob, hidden_dim)
+                print(f"Instantiating ResNet with num_classes={model.num_classes}, keep_prob={model.keep_prob}, and hidden_dim={model.hidden_dim}")
+
+
         else:
             raise ValueError("model can either be a nn.Module or a pre-stated string.")
 
