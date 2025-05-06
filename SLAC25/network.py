@@ -74,16 +74,18 @@ class Wrapper:
             g = torch.Generator()
             g.manual_seed(self.seed)
 
-            N_TOTAL = len(trainDataset)
-            N_TRAIN = 3000               
-            N_VAL   = 1000                  
-            assert N_TRAIN + N_VAL <= N_TOTAL, "requested split larger than datas"
+           # --- TRAIN ----------------------------------------------------------------
+            N_TRAIN = 10000
+            perm_train = torch.randperm(len(trainDataset), generator=g)
+            train_idx  = perm_train[:min(N_TRAIN, len(trainDataset))].tolist()
 
-            perm = torch.randperm(N_TOTAL, generator=g)
-            train_idx = perm[:N_TRAIN].tolist()
-            val_idx   = perm[N_TRAIN:N_TRAIN + N_VAL].tolist()
+            # --- VALIDATION -----------------------------------------------------------
+            N_VAL  = 3000
+            perm_val = torch.randperm(len(valDataset), generator=g)
+            val_idx  = perm_val[:min(N_VAL, len(valDataset))].tolist()
             
-            # subset_indices = torch.randperm(len(trainDataset), generator=g)[:N_SAMPLES].tolist()
+            assert max(train_idx) < len(trainDataset)
+            assert max(val_idx)   < len(valDataset)
 
         else:
             if max_imgs is not None:
@@ -130,6 +132,7 @@ class Trainable(tune.Trainable):
         self.outdir = config["outdir"]
         self.verbose = config["verbose"]
         self.testmode = config["testmode"]
+        self.tune = config["tune"]
         self.seed = config["seed"]
 
         self.wrapper = ModelWrapper(self.model,
@@ -139,6 +142,7 @@ class Trainable(tune.Trainable):
                                     self.outdir,
                                     self.verbose,
                                     self.testmode,
+                                    self.tune,
                                     self.seed)
 
         self.best_loss= float("inf")
@@ -406,16 +410,19 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
                 print("Error saving model: {}".format(e))
         
         self.train_log['learning_rates'].append(self.optimizer.param_groups[0]['lr'])
-        ##### Learning Rate Scheduler #####
-        # store the current LR
-        current_lr = self.optimizer.param_groups[0]['lr']
-        # check if the LR needs to be updated
-        self.lr_scheduler.step(val_loss)
-        # store the new LR
-        new_lr = self.optimizer.param_groups[0]['lr']
-        # check if the LR has been updated
-        if new_lr != current_lr:
-            print("Learning rate updated from {} to {}\n".format(current_lr, new_lr))
+
+        if not self.tune:
+            ##### Learning Rate Scheduler #####
+            # store the current LR
+            current_lr = self.optimizer.param_groups[0]['lr']
+            # check if the LR needs to be updated
+            self.lr_scheduler.step(val_loss)
+            # store the new LR
+            new_lr = self.optimizer.param_groups[0]['lr']
+            # check if the LR has been updated
+            if new_lr != current_lr:
+                print("Learning rate updated from {} to {}\n".format(current_lr, new_lr))
+        
 
         ##### Early Stopping #####
         # check if early stopping is triggered

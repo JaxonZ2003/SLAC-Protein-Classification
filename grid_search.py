@@ -2,6 +2,7 @@ import ray
 import shutil
 
 from ray import tune
+from ray.tune import CLIReporter
 from ray.tune.schedulers import ASHAScheduler
 from ray.tune.stopper import TrialPlateauStopper, MaximumIterationStopper, CombinedStopper
 from ray.tune import Tuner, TuneConfig, RunConfig, CheckpointConfig
@@ -11,6 +12,20 @@ from ray.tune.execution.placement_groups import PlacementGroupFactory
 from SLAC25.utils import *
 from SLAC25.network import Trainable
 from SLAC25.models import * # import the model
+
+search_space = {
+  "model": "BaselineCNN",
+  "num_classes": 4,
+  "keep_prob": tune.grid_search([0.75]),
+  "num_epochs": -1,
+  "lr": tune.grid_search([0.001, 0.01, 0.1]),
+  "batch_size": 32,
+  "verbose": False,
+  "testmode": False,
+  "outdir": "./models",
+  "tune": True,
+  "seed": 1
+}
 
 maxIterStopper = MaximumIterationStopper(10)
 
@@ -24,25 +39,16 @@ trailPlateauStoper = TrialPlateauStopper(
 
 combinedStopper = CombinedStopper(maxIterStopper, trailPlateauStoper)
 
-search_space = {
-  "model": "BaselineCNN",
-  "num_classes": 4,
-  "keep_prob": tune.grid_search([0.75]),
-  "num_epochs": -1,
-  "lr": tune.grid_search([0.001, 0.01]),
-  "batch_size": 32,
-  "verbose": False,
-  "testmode": True,
-  "outdir": "./models",
-  "tune": False,
-  "seed": 1
-}
 
 ray.init()
 
 trainable_with_resources = tune.with_resources(
     Trainable,
     resources=PlacementGroupFactory([{"CPU": 2, "GPU": 1}])
+)
+
+reporter = CLIReporter(
+  metric_columns=["val_accuracy", "val_loss"]
 )
 
 tuner = Tuner(
@@ -55,10 +61,11 @@ tuner = Tuner(
     reuse_actors=False,
   ),
   run_config=RunConfig(
+    name="BaselineCNN_gs_lr",
     stop=combinedStopper,
     storage_path="~/ray_out",
     checkpoint_config=CheckpointConfig(
-    #  write ONLY at the *very end*
+    # write ONLY at the very end
     checkpoint_frequency=0,
     checkpoint_at_end=True,
     num_to_keep=1,                       # keep one file max
