@@ -78,7 +78,7 @@ tuner = Tuner(
     reuse_actors=False,
   ),
   run_config=RunConfig(
-    name="BaselineCNN_gs_lr",
+    name="ResNet_Tune",
     stop=combinedStopper,
     storage_path="~/ray_out",
     checkpoint_config=CheckpointConfig(
