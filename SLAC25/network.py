@@ -127,8 +127,16 @@ class Trainable(tune.Trainable):
     def setup(self, config):
         self.num_epochs = config["num_epochs"]
         self.lr = config["lr"]
-        self.model = self._init_model(config["model"], config["num_classes"], config["keep_prob"])
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
+
+        if config['hidden_dim']:
+            hd = config['hidden_dim']
+        else:
+            hd = None
+
+        self.model = self._init_model(config["model"], config["num_classes"], config["keep_prob"], hd)
+        self.optimizer = optim.Adam(self.model.parameters(), 
+                                    lr=self.lr,
+                                    betas=(config["beta1"], config["beta2"]))
         self.batchsize = config["batch_size"]
 
 

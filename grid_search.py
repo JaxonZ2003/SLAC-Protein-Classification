@@ -27,6 +27,23 @@ search_space = {
   "seed": 1
 }
 
+resnet_sp = {
+  "model": "ResNet",
+  "num_classes": 4,
+  "num_epochs": 10,
+  "batch_size": 32,
+  "verbose": True,
+  "testmode": False,
+  "outdir": "./models",
+  "tune": True,
+  "seed": 1,
+  "hidden_dim": tune.choice([256, 512]),
+  "lr": tune.loguniform(1e-4, 1e-1),
+  "keep_prob": tune.uniform(0.5, 0.9),
+  "beta1": tune.uniform(0.5, 0.9),
+  "beta2": tune.uniform(0.5, 0.9),
+}
+
 maxIterStopper = MaximumIterationStopper(10)
 
 trailPlateauStoper = TrialPlateauStopper(
@@ -53,11 +70,11 @@ reporter = CLIReporter(
 
 tuner = Tuner(
   trainable_with_resources,
-  param_space=search_space,
+  param_space=resnet_sp,
   tune_config=TuneConfig(
     metric="val_accuracy",
     mode="max",
-    num_samples=1, # if grid_search, keep it one if wanna run all combination
+    num_samples=5, # if grid_search, keep it =1 if wanna run all combination
     reuse_actors=False,
   ),
   run_config=RunConfig(
