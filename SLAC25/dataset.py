@@ -149,9 +149,15 @@ class ImageDataset(Dataset):
 
 if __name__ == "__main__":
   package_root = os.path.dirname(os.path.abspath(__file__))
-  data_path = os.path.join(package_root, "..", "data", "train_info.csv")
-  data_path = os.path.abspath(data_path)
-  testData = ImageDataset(data_path, transform=None, config=None, recordTransform=True)
+  train_data_path = os.path.join(package_root, "..", "data", "train_info.csv")
+  train_data_path = os.path.abspath(train_data_path)
+  val_data_path = os.path.join(package_root, "..", "data", "val_info.csv")
+  val_data_path = os.path.abspath(val_data_path)
+  trainData = ImageDataset(train_data_path, transform=None, config=None, recordTransform=False)
+  valData = ImageDataset(val_data_path, transform=None, config=None, recordTransform=False)
+  trainData.summary()
+  valData.summary()
 
-  testData.visualizeAndSave(120)
+
+  # testData.visualizeAndSave(120)
   # print(data_path)

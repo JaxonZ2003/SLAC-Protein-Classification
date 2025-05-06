@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -J gsBsCNN
+#SBATCH -J BsCNNstf
 #SBATCH -N 1
 #SBATCH --ntasks-per-node=1
 #SBATCH --partition=gpu
@@ -9,5 +9,16 @@
 #SBATCH -t 24:00:00
 
 # source ~/dials.sh
+
+if [[ -f "$HOME/dials.sh" ]]; then
+  source "$HOME/dials.sh"
+  
+else
+  echo "No dials.sh or modules found"
+  exit 0
+fi
+
+
+echo "Environment set up okay"
 
 python /home/jaxonz/SLAC/capstone-SLAC/grid_search.py

@@ -71,21 +71,22 @@ class Wrapper:
             batch_size = 5
 
         elif self.tune is True:
-            g = torch.Generator()
-            g.manual_seed(self.seed)
+            pass
+            # g = torch.Generator()
+            # g.manual_seed(self.seed)
 
-           # --- TRAIN ----------------------------------------------------------------
-            N_TRAIN = 10000
-            perm_train = torch.randperm(len(trainDataset), generator=g)
-            train_idx  = perm_train[:min(N_TRAIN, len(trainDataset))].tolist()
+        #    # --- TRAIN ----------------------------------------------------------------
+        #     N_TRAIN = 10000
+        #     perm_train = torch.randperm(len(trainDataset), generator=g)
+        #     train_idx  = perm_train[:min(N_TRAIN, len(trainDataset))].tolist()
 
-            # --- VALIDATION -----------------------------------------------------------
-            N_VAL  = 3000
-            perm_val = torch.randperm(len(valDataset), generator=g)
-            val_idx  = perm_val[:min(N_VAL, len(valDataset))].tolist()
+        #     # --- VALIDATION -----------------------------------------------------------
+        #     N_VAL  = 3000
+        #     perm_val = torch.randperm(len(valDataset), generator=g)
+        #     val_idx  = perm_val[:min(N_VAL, len(valDataset))].tolist()
             
-            assert max(train_idx) < len(trainDataset)
-            assert max(val_idx)   < len(valDataset)
+        #     assert max(train_idx) < len(trainDataset)
+        #     assert max(val_idx)   < len(valDataset)
 
         else:
             if max_imgs is not None:
@@ -101,8 +102,10 @@ class Wrapper:
 
 
         if self.tune is True:
-            train_factory.setSubsetRandomSampler(train_idx, generator=g)
-            val_factory.setSubsetRandomSampler(val_idx, generator=g)
+            # train_factory.setSubsetRandomSampler(train_idx, generator=g)
+            # val_factory.setSubsetRandomSampler(val_idx, generator=g)
+            train_factory.setStratifiedSampler(5000)
+            val_factory.setStratifiedSampler(2000)
 
             self.train_loader = train_factory.outputDataLoader()
             self.val_loader = val_factory.outputDataLoader()
