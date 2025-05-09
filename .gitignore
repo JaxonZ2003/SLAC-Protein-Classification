@@ -4,3 +4,4 @@ checkpoint.pt
 logs/*/**
 img/*/**
 *.egg-info/
+rough_script.py

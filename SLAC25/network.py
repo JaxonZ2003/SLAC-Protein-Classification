@@ -5,8 +5,8 @@ import sys
 import math
 import time
 import pytz
-import tempfile
-import gc
+# import tempfile
+# import gc
 import random
 import torch.nn as nn
 import torch.optim as optim
@@ -15,8 +15,6 @@ import numpy as np
 from torch.utils.data import Subset
 from torchmetrics import AUROC
 from datetime import datetime
-from ray import tune
-from ray.tune import Checkpoint
 
 from SLAC25.dataset import ImageDataset
 from SLAC25.dataloader import DataLoaderFactory
@@ -118,102 +116,6 @@ class Wrapper:
             self.train_loader = train_factory.outputDataLoader()
             self.test_loader = test_factory.outputDataLoader() 
             self.val_loader = val_factory.outputDataLoader()
-
-
-class Trainable(tune.Trainable):
-    """
-    Defining all tunable hyperparams
-    """
-    def setup(self, config):
-        self.num_epochs = config["num_epochs"]
-        self.lr = config["lr"]
-
-        if config['hidden_dim']:
-            hd = config['hidden_dim']
-        else:
-            hd = None
-
-        self.model = self._init_model(config["model"], config["num_classes"], config["keep_prob"], hd)
-        self.optimizer = optim.Adam(self.model.parameters(), 
-                                    lr=self.lr,
-                                    betas=(config["beta1"], config["beta2"]))
-        self.batchsize = config["batch_size"]
-
-
-        self.outdir = config["outdir"]
-        self.verbose = config["verbose"]
-        self.testmode = config["testmode"]
-        self.tune = config["tune"]
-        self.seed = config["seed"]
-
-        self.wrapper = ModelWrapper(self.model,
-                                    self.num_epochs,
-                                    self.optimizer,
-                                    self.batchsize,
-                                    self.outdir,
-                                    self.verbose,
-                                    self.testmode,
-                                    self.tune,
-                                    self.seed)
-
-        self.best_loss= float("inf")
-        self.best_state = None
-        
-    def _init_model(self, model, num_classes, keep_prob, hidden_dim=256):
-        if isinstance(model, nn.Module):
-            print("Using pre-instantiated model. num_classes and keep_prob are ignored.\n")
-                  
-        elif isinstance(model, str):
-            if model == "BaselineCNN":
-                model = BaselineCNN(num_classes, keep_prob)
-                print(f"Instantiating BaselineCNN with num_classes={model.num_classes} and keep_prob={model.keep_prob}")
-
-            if model == "ResNet":
-                model = ResNet(num_classes, keep_prob, hidden_dim)
-                print(f"Instantiating ResNet with num_classes={model.num_classes}, keep_prob={model.keep_prob}, and hidden_dim={model.hidden_dim}")
-
-
-        else:
-            raise ValueError("model can either be a nn.Module or a pre-stated string.")
-
-        assert isinstance(model, nn.Module), "Expected a PyTorch model"
-
-        return model
-    
-    def step(self):
-        self.wrapper._train_one_epoch()
-        val_acc, val_loss = self.wrapper._val_one_epoch()
-        val_acc = float(val_acc)
-        val_loss = float(val_loss)
-
-        if val_loss < self.best_loss:
-            self.best_loss = val_loss
-            self.best_state = {
-                "model": self.model.state_dict(),
-                "optim": self.optimizer.state_dict(),
-                "epoch": self.iteration,
-            }
-
-        return {"val_accuracy": val_acc, "val_loss": val_loss}
-        # finally:
-        #     del self.model
-        #     del self.optimizer
-        #     gc.collect()
-        #     torch.cuda.empty_cache()
-        
-    def save_checkpoint(self, chkpt_dir):
-        """
-        Ray calls this exactly once at the *end* (because of
-        checkpoint_at_end=True).  Now we finally write our best model.
-        """
-        path = os.path.join(chkpt_dir, "best.pt")
-        torch.save(self.best_state, path)
-        return chkpt_dir       # Ray handles the directory
-    
-    def reset_config(self, new_config):
-        self.config = new_config
-        return True
-
 
     
 class ModelWrapper(Wrapper): # inherits from Wrapper class
