@@ -25,14 +25,14 @@ class Wrapper:
     """
     General class that applies to all models
     """
-    def __init__(self, model, num_epochs, optimizer, batch_size, outdir='./models', verbose=False, testmode=False, tune=False, seed=1):
+    def __init__(self, model, num_epochs, optimizer, batch_size, outdir='./models', lr_scheduler=True, verbose=False, testmode=False, tune=False, seed=1):
         self.model = model
         self.num_epochs = None if (num_epochs < 0) else num_epochs
         self.optimizer = optimizer
         self.criterion = nn.CrossEntropyLoss() # internally computes the softmax so no need for it. 
-        self.lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'min', factor=0.1, patience=5, min_lr=1e-6)
-        self.EarlyStopping = None # EarlyStopping(patience=7, verbose=False)
+        self.lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'min', factor=0.1, patience=5, min_lr=1e-6) if lr_scheduler else None
         self.tune = tune
+        self.EarlyStopping = EarlyStopping(patience=7, verbose=False) if not self.tune else None
         self.seed = seed
         
         self.verbose = verbose
@@ -119,8 +119,8 @@ class Wrapper:
 
     
 class ModelWrapper(Wrapper): # inherits from Wrapper class
-    def __init__(self, model, num_epochs, optimizer, batch_size, outdir='./models', verbose=False, testmode=False, tune=False, seed=1):
-        super().__init__(model, num_epochs, optimizer, batch_size, outdir=outdir, verbose=verbose, testmode=testmode, tune=tune, seed=seed)
+    def __init__(self, model, num_epochs, optimizer, batch_size, outdir='./models', lr_scheduler=True, verbose=False, testmode=False, tune=False, seed=1):
+        super().__init__(model, num_epochs, optimizer, batch_size, outdir=outdir, lr_scheduler=lr_scheduler, verbose=verbose, testmode=testmode, tune=tune, seed=seed)
         self._verbose_printer(style="setup_header")
         self.current_epoch = 0
         self.train_log = {
@@ -183,9 +183,6 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
             if style == "main_footer":
                 print("\n{:=^70}".format(" Training Complete "))
               
-    def _testmode_operation(self):
-        pass
-
     def summary(self):
         """
         Print a summary of the training setup configuration.
@@ -324,7 +321,7 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
         
         self.train_log['learning_rates'].append(self.optimizer.param_groups[0]['lr'])
 
-        if not self.tune:
+        if self.lr_scheduler is not None:
             ##### Learning Rate Scheduler #####
             # store the current LR
             current_lr = self.optimizer.param_groups[0]['lr']

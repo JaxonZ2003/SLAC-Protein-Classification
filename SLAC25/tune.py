@@ -15,28 +15,30 @@ class Trainable(tune.Trainable):
     Defining all tunable hyperparams
     """
     def setup(self, config):
-        self.num_epochs = config["num_epochs"]
+        self.num_epochs = config.get("num_epochs", -1)
         self.lr = config["lr"]
 
 
-        self.model = self._init_model(config["model"], config["num_classes"], config["keep_prob"], config.get("hidden_dim", None))
+        self.model = self._init_model(config["model"], config.get("num_classes", 4), config["keep_prob"], config.get("hidden_dim", None))
         self.optimizer = optim.Adam(self.model.parameters(), 
                                     lr=self.lr,
                                     betas=(config.get("beta1", 0.9), config.get("beta2", 0.999)))
+        self.lr_scheduler = config.get("lr_scheduler", False)
         self.batchsize = config["batch_size"]
 
 
-        self.outdir = config["outdir"]
-        self.verbose = config["verbose"]
+        self.outdir = config.get("outdir", "./models")
+        self.verbose = config.get("verbose", False)
         self.testmode = config["testmode"]
-        self.tune = config["tune"]
-        self.seed = config["seed"]
+        self.tune = config.get("tune", True)
+        self.seed = config.get("seed", 197)
 
         self.wrapper = ModelWrapper(self.model,
                                     self.num_epochs,
                                     self.optimizer,
                                     self.batchsize,
                                     self.outdir,
+                                    self.lr_scheduler,
                                     self.verbose,
                                     self.testmode,
                                     self.tune,
@@ -67,10 +69,12 @@ class Trainable(tune.Trainable):
         return model
     
     def step(self):
-        self.wrapper._train_one_epoch()
+        train_acc, train_loss = self.wrapper._train_one_epoch()
         val_acc, val_loss = self.wrapper._val_one_epoch()
         val_acc = float(val_acc)
         val_loss = float(val_loss)
+        train_acc = float(train_acc)
+        train_loss = float(train_loss)
 
         if val_loss < self.best_loss:
             self.best_loss = val_loss
@@ -80,7 +84,8 @@ class Trainable(tune.Trainable):
                 "epoch": self.iteration,
             }
 
-        return {"val_accuracy": val_acc, "val_loss": val_loss}
+        return {"val_accuracy": val_acc, "val_loss": val_loss,
+                "train_accuracy": train_acc, "train_loss": train_loss}
         # finally:
         #     del self.model
         #     del self.optimizer
