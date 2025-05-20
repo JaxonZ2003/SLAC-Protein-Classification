@@ -68,24 +68,6 @@ class Wrapper:
             valDataset = Subset(valDataset, list(range(10)))
             batch_size = 5
 
-        elif self.tune is True:
-            pass
-            # g = torch.Generator()
-            # g.manual_seed(self.seed)
-
-        #    # --- TRAIN ----------------------------------------------------------------
-        #     N_TRAIN = 10000
-        #     perm_train = torch.randperm(len(trainDataset), generator=g)
-        #     train_idx  = perm_train[:min(N_TRAIN, len(trainDataset))].tolist()
-
-        #     # --- VALIDATION -----------------------------------------------------------
-        #     N_VAL  = 3000
-        #     perm_val = torch.randperm(len(valDataset), generator=g)
-        #     val_idx  = perm_val[:min(N_VAL, len(valDataset))].tolist()
-            
-        #     assert max(train_idx) < len(trainDataset)
-        #     assert max(val_idx)   < len(valDataset)
-
         else:
             if max_imgs is not None:
                 ntrain = int(.9 * max_imgs)
@@ -104,9 +86,11 @@ class Wrapper:
             # val_factory.setSubsetRandomSampler(val_idx, generator=g)
             train_factory.setStratifiedSampler(5000)
             val_factory.setStratifiedSampler(2000)
+            test_factory.setSequentialSampler()
 
             self.train_loader = train_factory.outputDataLoader()
             self.val_loader = val_factory.outputDataLoader()
+            self.test_loader = test_factory.outputDataLoader()
 
         else:
             train_factory.setSequentialSampler()
@@ -400,6 +384,8 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
         }
 
         self._verbose_printer(style="test_report", test_report=test_report)
+
+        return test_acc, test_loss
 
 
         # load existing log file...if it exists

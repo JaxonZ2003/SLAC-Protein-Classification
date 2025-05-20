@@ -71,10 +71,13 @@ class Trainable(tune.Trainable):
     def step(self):
         train_acc, train_loss = self.wrapper._train_one_epoch()
         val_acc, val_loss = self.wrapper._val_one_epoch()
+        test_acc, test_loss = self.wrapper.test()
         val_acc = float(val_acc)
         val_loss = float(val_loss)
         train_acc = float(train_acc)
         train_loss = float(train_loss)
+        test_acc = float(test_acc)
+        test_loss = float(test_loss)
 
         if val_loss < self.best_loss:
             self.best_loss = val_loss
@@ -85,7 +88,8 @@ class Trainable(tune.Trainable):
             }
 
         return {"val_accuracy": val_acc, "val_loss": val_loss,
-                "train_accuracy": train_acc, "train_loss": train_loss}
+                "train_accuracy": train_acc, "train_loss": train_loss,
+                "test_accuracy": test_acc, "test_loss": test_loss}
         # finally:
         #     del self.model
         #     del self.optimizer

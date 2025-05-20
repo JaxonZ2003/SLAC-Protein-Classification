@@ -22,4 +22,4 @@ fi
 
 echo "Environment set up okay"
 
-python /home/jaxonz/SLAC/capstone-SLAC/grid_search.py -s 1 -g
+python /home/jaxonz/SLAC/capstone-SLAC/grid_search.py -s 3 -g

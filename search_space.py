@@ -55,6 +55,7 @@ BaselineCNN_sl_sp = {
 Tune for the best hyperparams of ResNet that cause significant improvement of Loss
 '''
 ResNet_lr256_sp = {
+  "name": "ResNet_dim256_lr",
   "model": "ResNet",
   "batch_size": 32,
   "testmode": False,
@@ -69,6 +70,7 @@ ResNet_lr256_sp = {
 Tune for the best hyperparams of ResNet that cause significant improvement of Loss
 '''
 ResNet_lr512_sp = {
+  "name": "ResNet_dim512_lr",
   "model": "ResNet",
   "batch_size": 32,
   "testmode": False,

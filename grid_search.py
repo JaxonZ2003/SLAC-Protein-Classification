@@ -69,7 +69,7 @@ def run_tune(storage_path, exp_name, search_space, max_epoch=10, grace=5, patien
     trainable_with_resources,
     param_space=search_space,
     tune_config=TuneConfig(
-      metric="val_accuracy",
+      metric="val_accuracy" if not search_space.get("lr_scheduler", False) else "test_accuracy",
       mode="max",
       num_samples=5 if not grid_search else 1, # if grid_search, keep it =1 if wanna run all combination
       reuse_actors=False,

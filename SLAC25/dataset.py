@@ -101,7 +101,7 @@ class ImageDataset(Dataset):
 
     
     timeNow = datetime.now(pytz.timezone("America/Los_Angeles")).strftime("%Y%m%d%H%M%S")
-    filename = os.path.join(savedPath ,f"{self.datasetType}_{timeNow}_{idx}.png")
+    filename = os.path.join(savedPath, f"{self.datasetType}_{timeNow}_{idx}.png")
     filename = os.path.abspath(filename)
 
     ### Image Before Transform ###
@@ -153,10 +153,14 @@ if __name__ == "__main__":
   train_data_path = os.path.abspath(train_data_path)
   val_data_path = os.path.join(package_root, "..", "data", "val_info.csv")
   val_data_path = os.path.abspath(val_data_path)
+  test_data_path = os.path.join(package_root, "..", "data", "test_info.csv")
+  test_data_path = os.path.abspath(test_data_path)
   trainData = ImageDataset(train_data_path, transform=None, config=None, recordTransform=False)
   valData = ImageDataset(val_data_path, transform=None, config=None, recordTransform=False)
+  testData = ImageDataset(test_data_path, transform=None, config=None, recordTransform=False)
   trainData.summary()
   valData.summary()
+  testData.summary()
 
 
   # testData.visualizeAndSave(120)
