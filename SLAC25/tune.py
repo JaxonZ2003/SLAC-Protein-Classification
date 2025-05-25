@@ -71,7 +71,7 @@ class Trainable(tune.Trainable):
     def step(self):
         train_acc, train_loss = self.wrapper._train_one_epoch()
         val_acc, val_loss = self.wrapper._val_one_epoch()
-        test_acc, test_loss = self.wrapper.test()
+        test_acc, test_loss = self.wrapper._test_one_epoch()
         val_acc = float(val_acc)
         val_loss = float(val_loss)
         train_acc = float(train_acc)

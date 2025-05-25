@@ -328,6 +328,10 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
         
         return val_acc, val_loss
 
+    def _test_one_epoch(self):
+        test_loss, test_acc = evaluate_model(self.model, self.test_loader, self.criterion, self.device)
+        return test_acc, test_loss
+
     def train(self):
         """
         Train the model.

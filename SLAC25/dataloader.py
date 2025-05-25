@@ -9,7 +9,7 @@ from PIL import Image
 
 
 class DataLoaderFactory:
-    def __init__(self, dataset, batch_size=32, num_workers=8, pin_memory=False, drop_last=False, shuffle=False):
+    def __init__(self, dataset, batch_size=32, num_workers=0, pin_memory=False, drop_last=False, shuffle=False):
         """
         Initializes the DataLoader for the dataset.
 

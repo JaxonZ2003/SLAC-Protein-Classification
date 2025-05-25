@@ -120,9 +120,9 @@ class ImageDataset(Dataset):
     ax[0].axis('off')
     ax[1].imshow(imgAftTnp)
     ax[1].axis('off')
-    fig.text(**titleBefT_params)
-    fig.text(**titleAftT_params)
-    fig.text(**label_params)
+    # fig.text(**titleBefT_params)
+    # fig.text(**titleAftT_params)
+    # fig.text(**label_params)
     fig.text(**label_transformlogs)
     plt.tight_layout()
     plt.savefig(filename, bbox_inches='tight', pad_inches=0.1)
@@ -157,11 +157,19 @@ if __name__ == "__main__":
   test_data_path = os.path.abspath(test_data_path)
   trainData = ImageDataset(train_data_path, transform=None, config=None, recordTransform=False)
   valData = ImageDataset(val_data_path, transform=None, config=None, recordTransform=False)
-  testData = ImageDataset(test_data_path, transform=None, config=None, recordTransform=False)
+  testData = ImageDataset(test_data_path, transform=None, config=None, recordTransform=True)
   trainData.summary()
   valData.summary()
   testData.summary()
 
+  # print(trainData[134][0])
 
-  # testData.visualizeAndSave(120)
-  # print(data_path)
+
+  testData.visualizeAndSave(2003)
+
+  # testData.visualizeAndSave(2025)
+
+  testData.visualizeAndSave(2030)
+
+  testData.visualizeAndSave(2070)
+
