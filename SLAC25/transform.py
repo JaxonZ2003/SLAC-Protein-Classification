@@ -143,4 +143,3 @@ class TransformV1():
         return v2.RandomAdjustSharpness()(img)
     
     return img
-    

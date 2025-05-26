@@ -45,7 +45,7 @@ class DataLoaderFactory:
         self.sampler = RandomSampler(self.dataset, replacement, num_samples, generator)
     
     def setWeightedRandomSampler(self, weights, num_samples=1000, replacement=True, generator=None):
-        if weights != len(self.dataset):
+        if len(weights) != len(self.dataset):
              raise ValueError(
                  f"Invalid weights: Expected a list of length {len(self.dataset)}, "
                  f"but received a list of length {len(weights)}. Each data point in the dataset must have a corresponding weight."

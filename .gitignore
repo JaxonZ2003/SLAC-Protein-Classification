@@ -3,6 +3,10 @@ __pycache__/
 checkpoint.pt
 logs/*/**
 img/*/**
-*.egg-info/
 parallel_jobs.sh
 img/*
+.ipynb_checkpointscheckpoint.pt
+.vscode/
+err
+out
+checkpoint.ptcheckpoint.pt
