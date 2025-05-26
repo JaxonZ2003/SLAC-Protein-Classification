@@ -207,8 +207,8 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
         # start_time = time.time()
 
         for batch_idx, (images, labels) in enumerate(self.train_loader):
-            images, labels = images.to(self.device), labels.to(self.device)
-            self.optimizer.zero_grad() # zero the gradients
+            images, labels = images.to(self.device, non_blocking=True), labels.to(self.device)
+            self.optimizer.zero_grad(set_to_none=True) # zero the gradients
             outputs = self.model(images) # forward pass
             loss = self.criterion(outputs, labels) # compute the loss
             loss.backward() # backpropagation
@@ -224,29 +224,32 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
             total += labels.size(0)
             correct += predicted.eq(labels).sum().item() # if the predicted label equals the actual label, add 1 to the correct
 
-            if batch_idx % 100 == 0:
-                progress = f"{batch_idx+1}/{nbatch}"
-                batch_acc = correct / total
-                batch_report = {"batch_idx": batch_idx,
-                                "loss": loss.item(),
-                                "batch_acc": batch_acc,
-                                "progress": progress}
+            # if batch_idx % 100 == 0:
+            #     progress = f"{batch_idx+1}/{nbatch}"
+            #     batch_acc = correct / total
+            #     batch_report = {"batch_idx": batch_idx,
+            #                     "loss": loss.item(),
+            #                     "batch_acc": batch_acc,
+            #                     "progress": progress}
                 
-                self._verbose_printer(style="batch_report", 
-                                      batch_report=batch_report)
+                # self._verbose_printer(style="batch_report", 
+                #                       batch_report=batch_report)
                 
         epoch_loss = running_loss / len(self.train_loader)
         epoch_acc = correct / total
-        self.train_log['epoch'].append(self.current_epoch)
-        self.train_log['train_loss'].append(epoch_loss)
-        self.train_log['train_acc'].append(epoch_acc)
+        # self.train_log['epoch'].append(self.current_epoch)
+        # self.train_log['train_loss'].append(epoch_loss)
+        # self.train_log['train_acc'].append(epoch_acc)
 
-        epoch_report = {"epoch_loss": epoch_loss,
-                        "epoch_acc": epoch_acc}
+        # epoch_report = {"epoch_loss": epoch_loss,
+        #                 "epoch_acc": epoch_acc}
 
         
-        self._verbose_printer(style="epoch_report",
-                              epoch_report=epoch_report)
+        # self._verbose_printer(style="epoch_report",
+        #                       epoch_report=epoch_report)
+
+        del outputs, loss, images, labels
+        torch.cuda.empty_cache()
         
         return epoch_acc, epoch_loss
 
@@ -270,40 +273,40 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
         val_loss = val_running_loss / len(self.val_loader)
         val_acc = val_correct / val_total
 
-        if val_loss < self.train_log["min_val_loss"]:
-            self.train_log["min_val_loss"] = val_loss
+        # if val_loss < self.train_log["min_val_loss"]:
+        #     self.train_log["min_val_loss"] = val_loss
         
-        self.train_log['val_loss'].append(val_loss)
-        self.train_log['val_acc'].append(val_acc)
+        # self.train_log['val_loss'].append(val_loss)
+        # self.train_log['val_acc'].append(val_acc)
 
-        val_report = {
-            "val_loss": val_loss,
-            "val_acc": val_acc
-        }
+        # val_report = {
+        #     "val_loss": val_loss,
+        #     "val_acc": val_acc
+        # }
 
-        self._verbose_printer(style="val_report", val_report=val_report)
+        # self._verbose_printer(style="val_report", val_report=val_report)
 
-        if not self.testmode and val_loss < min_val_loss:
-            min_val_loss = val_loss
-            timeNow = datetime.now(pytz.timezone("America/Los_Angeles")).strftime("%Y%m%d%H%M%S")
-            model_name = os.path.join(self.outdir, f"ResNet_50_Transfer_Learning_{timeNow}_ep{self.current_epoch}.net")
-            save_file = os.path.abspath(model_name) 
-            try:
-                torch.save({
-                    'epoch': self.current_epoch,
-                    'model_state_dict': self.model.state_dict(),
-                    'optimizer_state_dict': self.optimizer.state_dict(),
-                    'train_loss': self.train_log["epoch_loss"][-1],
-                    'train_acc': self.train_log["epoch_acc"][-1],
-                    'val_loss': val_loss,
-                    'val_acc': val_acc
-                }, save_file)
-                self.train_log['model_checkpoints'].append(save_file)
-                print("New best model saved to {}".format(save_file))
-            except Exception as e:
-                print("Error saving model: {}".format(e))
+        # if not self.testmode and val_loss < min_val_loss:
+        #     min_val_loss = val_loss
+        #     timeNow = datetime.now(pytz.timezone("America/Los_Angeles")).strftime("%Y%m%d%H%M%S")
+        #     model_name = os.path.join(self.outdir, f"ResNet_50_Transfer_Learning_{timeNow}_ep{self.current_epoch}.net")
+        #     save_file = os.path.abspath(model_name) 
+        #     try:
+        #         torch.save({
+        #             'epoch': self.current_epoch,
+        #             'model_state_dict': self.model.state_dict(),
+        #             'optimizer_state_dict': self.optimizer.state_dict(),
+        #             'train_loss': self.train_log["epoch_loss"][-1],
+        #             'train_acc': self.train_log["epoch_acc"][-1],
+        #             'val_loss': val_loss,
+        #             'val_acc': val_acc
+        #         }, save_file)
+        #         self.train_log['model_checkpoints'].append(save_file)
+        #         print("New best model saved to {}".format(save_file))
+        #     except Exception as e:
+        #         print("Error saving model: {}".format(e))
         
-        self.train_log['learning_rates'].append(self.optimizer.param_groups[0]['lr'])
+        # self.train_log['learning_rates'].append(self.optimizer.param_groups[0]['lr'])
 
         if self.lr_scheduler is not None:
             ##### Learning Rate Scheduler #####

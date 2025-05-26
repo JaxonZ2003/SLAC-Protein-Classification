@@ -86,6 +86,7 @@ def run_tune(storage_path, exp_name, search_space, max_epoch=10, grace=5, patien
       num_samples=10, # if grid_search, keep it =1 if wanna run all combination
       scheduler=scheduler,
       reuse_actors=False,
+      max_concurrent_trials=2
     ),run_config=RunConfig(
       name=exp_name,
       # resources_per_trial={"cpu": 2, "gpu": 1},
@@ -95,7 +96,7 @@ def run_tune(storage_path, exp_name, search_space, max_epoch=10, grace=5, patien
       failure_config=FailureConfig(max_failures=3, fail_fast=False),
       checkpoint_config=CheckpointConfig(
       # write ONLY at the very end
-      checkpoint_frequency=0,
+      checkpoint_frequency=1,
       checkpoint_at_end=True,
       num_to_keep=1,                       # keep one file max
       )
@@ -128,6 +129,7 @@ def run_tune(storage_path, exp_name, search_space, max_epoch=10, grace=5, patien
         mode="max",
         num_samples=5 if not grid_search else 1, # if grid_search, keep it =1 if wanna run all combination
         reuse_actors=False,
+        max_concurrent_trials=2
       ),
       run_config=RunConfig(
         name=exp_name,
@@ -137,7 +139,7 @@ def run_tune(storage_path, exp_name, search_space, max_epoch=10, grace=5, patien
         failure_config=FailureConfig(max_failures=3, fail_fast=False),
         checkpoint_config=CheckpointConfig(
         # write ONLY at the very end
-        checkpoint_frequency=0,
+        checkpoint_frequency=2,
         checkpoint_at_end=True,
         num_to_keep=1,                       # keep one file max
         )

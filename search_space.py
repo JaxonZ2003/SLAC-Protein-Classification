@@ -145,8 +145,8 @@ ResNet_beta2 = {
   "beta2": tune.grid_search([0.9, 0.99, 0.999, 0.9999])
 }
 
-BestSoFar = {
-  "name": "BestSoFar",
+BestSoFarR = {
+  "name": "BestSoFarR",
   "model": "ResNet",
   "batch_size": 16,
   "testmode": False,
@@ -190,6 +190,6 @@ Experiments = {
   "7": ResNet_sl256_lr4,
   "8": ResNet_beta1,
   "9": ResNet_beta2,
-  "10": BestSoFar,
+  "10": BestSoFarR,
   "11": RandomSearch_1
 }
