@@ -15,7 +15,12 @@ vae.eval()
 z = torch.randn(NUM_IMAGES, LATENT_DIM).to(DEVICE)
 samples = vae.decode(z)
 
-os.makedirs("vae_outputs", exist_ok=True)
-vutils.save_image(samples, "vae_outputs/synthetic_samples.png", nrow=4)
+package_root = os.path.dirname(os.path.abspath(__file__))
+savedPath = os.path.join(package_root, "..", "img", "vae_outputs")
+savedPath = os.path.abspath(savedPath)
 
-print("🧪 Synthetic images saved to 'vae_outputs/synthetic_samples.png'")
+os.makedirs(savedPath, exist_ok=True)
+savedName = os.path.join(savedPath, "synthetic_samples.png")
+vutils.save_image(samples, savedName, nrow=4)
+
+print(f"🧪 Synthetic images saved to {savedName}")
