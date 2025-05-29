@@ -6,7 +6,7 @@ import torch.optim as optim
 import datetime
 
 from SLAC25.dataset import ImageDataset
-from SLAC25.VAE_model import MyVAE
+from SLAC25.models import MyVAE
 
 BATCH_SIZE = 8
 EPOCHS = 10

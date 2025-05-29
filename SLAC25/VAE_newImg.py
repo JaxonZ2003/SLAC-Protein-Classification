@@ -1,7 +1,7 @@
 # generates images from latent space
 import torch
 import torchvision.utils as vutils
-from SLAC25.VAE_model import MyVAE
+from SLAC25.models import MyVAE
 import os
 
 LATENT_DIM = 4
