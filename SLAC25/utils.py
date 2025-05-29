@@ -313,8 +313,9 @@ def find_data_path(fileDir):
     elif fileDir.endswith("capstone-SLAC"):
         return [os.path.abspath(os.path.join(fileDir, "data", dataset_path)) for dataset_path in dataset_paths]
     
+    # FIXME: can improve in future to be more flexible
     else:
-        raise ValueError(f"Unrecognized file ending directory {fileDir}: can only be SLAC25 or capstone-SLAC")
+        raise ValueError(f"Unrecognized file ending directory {fileDir}: can only be SLAC25 or capstone-SLAC.\nThis function can only run under directly SLAC25 directory.")
     
 def find_img_path(saved_subdir, saved_name, msg=False):
     package_root = os.path.dirname(os.path.abspath(__file__))

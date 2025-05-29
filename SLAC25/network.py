@@ -411,6 +411,22 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
         # return test_log
 
 
+class VAEWrapper(Wrapper):
+    def __init__(self, model, num_epochs, optimizer, batch_size=8, lr_scheduler=True, verbose=False, testmode=False, tune=False, seed=1):
+        pass
+
+    def _prepareTrainData(datasize=10000):
+        fileDir = os.path.dirname(os.path.abspath(__file__))
+        dataPaths = find_data_path(fileDir)
+        
+        trainDataset = ImageDataset(dataPaths[0])
+        trainDataset = Subset(trainDataset, list(range(10000)))
+
+        
+
+    def train():
+        pass
+
 if __name__ == "__main__":
     ########## parse arguments #########
     from argparse import ArgumentParser
