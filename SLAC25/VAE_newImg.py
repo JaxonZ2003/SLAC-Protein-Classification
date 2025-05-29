@@ -1,11 +1,13 @@
 # generates images from latent space
+import os
 import torch
 import torchvision.utils as vutils
+
 from SLAC25.models import MyVAE
-import os
+from SLAC25.utils import find_img_path
 
 LATENT_DIM = 4
-NUM_IMAGES = 16
+NUM_IMAGES = 16 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 vae = MyVAE(latent_dim=LATENT_DIM).to(DEVICE)
@@ -15,12 +17,8 @@ vae.eval()
 z = torch.randn(NUM_IMAGES, LATENT_DIM).to(DEVICE)
 samples = vae.decode(z)
 
-package_root = os.path.dirname(os.path.abspath(__file__))
-savedPath = os.path.join(package_root, "..", "img", "vae_outputs")
-savedPath = os.path.abspath(savedPath)
+savedName = find_img_path("vae_outputs", "synthetic_samples.png")
 
-os.makedirs(savedPath, exist_ok=True)
-savedName = os.path.join(savedPath, "synthetic_samples.png")
 vutils.save_image(samples, savedName, nrow=4)
 
 print(f"🧪 Synthetic images saved to {savedName}")
