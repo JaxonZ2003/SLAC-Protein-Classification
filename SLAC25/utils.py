@@ -301,6 +301,22 @@ def visualize_reconstruction(model, dataloader, device, outdir, num_samples=5, s
     
     return fig
 
+
+def find_data_path(fileDir):
+    """
+    return a list of [train_dataset_path, test_dataset_path, val_dataset_path]
+    """
+    dataset_paths = ["train_info.csv", "test_info.csv", "val_info.csv"]
+    if fileDir.endswith("SLAC25"):
+        return [os.path.abspath(os.path.join(fileDir, "..", "data", dataset_path)) for dataset_path in dataset_paths]
+    
+    elif fileDir.endswith("capstone-SLAC"):
+        return [os.path.abspath(os.path.join(fileDir, "data", dataset_path)) for dataset_path in dataset_paths]
+    
+    else:
+        raise ValueError(f"Unrecognized file ending directory {fileDir}: can only be SLAC25 or capstone-SLAC")
+    
+    
 if __name__ == "__main__":
     package_root = os.path.dirname(os.path.abspath(__file__))
     train_path = os.path.join(package_root, "..", "data", "train_info.csv")

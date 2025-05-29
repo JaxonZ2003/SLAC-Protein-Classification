@@ -248,8 +248,6 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
         # self._verbose_printer(style="epoch_report",
         #                       epoch_report=epoch_report)
 
-        del outputs, loss, images, labels
-        torch.cuda.empty_cache()
         
         return epoch_acc, epoch_loss
 

@@ -34,11 +34,7 @@ def run_tune(storage_path, exp_name, search_space, max_epoch=10, grace=5, patien
                   os.environ.get("SLURM_GPUS_PER_NODE") or
                   len(os.environ.get("SLURM_JOB_GPUS","").split(",")) or 0)
 
-  ray.init(
-      num_cpus=num_cpus,
-      num_gpus=num_gpus,
-      object_store_memory=4 * 1024**3      # 4 GB for the plasma store
-  )
+  ray.init()
 
   # ray.init(address="auto")
 

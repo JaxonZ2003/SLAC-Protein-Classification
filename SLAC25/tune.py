@@ -71,9 +71,6 @@ class Trainable(tune.Trainable):
     def step(self):
         train_acc, train_loss = self.wrapper._train_one_epoch()
 
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
         val_acc, val_loss = self.wrapper._val_one_epoch()
         test_acc, test_loss = self.wrapper._test_one_epoch()
         val_acc = float(val_acc)
