@@ -55,7 +55,7 @@ BaselineCNN_sl_sp = {
 
 # Experiment 4
 '''
-Tune for the best hyperparams of ResNet that cause significant improvement of Loss
+Tune for the best learning rate of ResNet50 with hidden dimension of 256
 '''
 ResNet_lr256_sp = {
   "name": "ResNet_dim256_lr",
@@ -70,7 +70,7 @@ ResNet_lr256_sp = {
 
 # Experiment 5
 '''
-Tune for the best hyperparams of ResNet that cause significant improvement of Loss
+Tune for the best learning rate of ResNet50 with hidden dimension of 512
 '''
 ResNet_lr512_sp = {
   "name": "ResNet_dim512_lr",
@@ -85,7 +85,7 @@ ResNet_lr512_sp = {
 
 # Experiment 6
 '''
-Tune for the best hyperparams of ResNet that cause significant improvement of Loss
+Tune for the best drop out rate of ResNet50 with hidden dimension of 256
 '''
 ResNet_dr256_lr4 = {
   "name": "ResNet_dr256_lr4",
@@ -100,7 +100,7 @@ ResNet_dr256_lr4 = {
 
 # Experiment 7
 '''
-Tune for the best hyperparams of ResNet that cause significant improvement of Loss
+Tune for the effect of learning rate scheduler of ResNet50 with hidden dimension of 256
 '''
 ResNet_sl256_lr4 = {
   "name": "ResNet_sl256_lr4",
@@ -116,7 +116,7 @@ ResNet_sl256_lr4 = {
 
 # Experiment 8
 '''
-Tune for Betas
+Tune for the beta1 of ResNet50 with hidden dimension of 256
 '''
 ResNet_beta1 = {
   "name": "ResNet_beta1",
@@ -131,6 +131,10 @@ ResNet_beta1 = {
   "beta1": tune.grid_search([0.5, 0.7, 0.9, 0.95])
 }
 
+# Experiment 9
+'''
+Tune for the beta2 of ResNet50 with hidden dimension of 256
+'''
 ResNet_beta2 = {
   "name": "ResNet_beta2",
   "model": "ResNet",
@@ -145,6 +149,11 @@ ResNet_beta2 = {
   "beta2": tune.grid_search([0.9, 0.99, 0.999, 0.9999])
 }
 
+
+# Experiment 10
+'''
+Train the best parameters so far after grid search from experiment 4 to 10
+'''
 BestSoFarR = {
   "name": "BestSoFarR",
   "model": "ResNet",
@@ -161,7 +170,12 @@ BestSoFarR = {
 }
 
 
-############ Random Search ASHAS
+############ Random Search ASHAS ############
+
+# Experiment 11
+'''
+Finer stochastic search of parameters in ResNet50
+'''
 
 RandomSearch_1 = {
   "name": "RandomSearch_1",

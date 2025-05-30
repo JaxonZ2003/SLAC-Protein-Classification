@@ -10,3 +10,6 @@ img/*
 err
 out
 checkpoint.ptcheckpoint.pt
+start-head.sh
+start-worker.sh
+submit_SlurmRay.sh

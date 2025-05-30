@@ -301,6 +301,50 @@ def visualize_reconstruction(model, dataloader, device, outdir, num_samples=5, s
     
     return fig
 
+
+def find_data_path(fileDir):
+    """
+    return a list of [train_dataset_path, test_dataset_path, val_dataset_path]
+    """
+    dataset_paths = ["train_info.csv", "test_info.csv", "val_info.csv"]
+    if fileDir.endswith("SLAC25"):
+        return [os.path.abspath(os.path.join(fileDir, "..", "data", dataset_path)) for dataset_path in dataset_paths]
+    
+    elif fileDir.endswith("capstone-SLAC"):
+        return [os.path.abspath(os.path.join(fileDir, "data", dataset_path)) for dataset_path in dataset_paths]
+    
+    # FIXME: can improve in future to be more flexible
+    else:
+        raise ValueError(f"Unrecognized file ending directory {fileDir}: can only be SLAC25 or capstone-SLAC.\nThis function can only run under directly SLAC25 directory.")
+    
+def find_img_path(saved_subdir, saved_name, msg=False):
+    package_root = os.path.dirname(os.path.abspath(__file__))
+    base_name = os.path.basename(package_root)
+
+    while base_name != "SLAC25":
+        print(base_name)
+        package_root = os.path.dirname(package_root)
+        base_name = os.path.basename(package_root)
+
+        if package_root == "/":
+            break
+
+    if base_name == "SLAC25":
+        savedPath = os.path.join(package_root, "..", "img", saved_subdir) if saved_subdir else os.path.join(package_root, "..", "img")
+        savedPath = os.path.abspath(savedPath)
+        os.makedirs(savedPath, exist_ok=True)
+        savedPath = os.path.join(savedPath, saved_name)
+
+        if msg:
+            print(f"File saved at {savedPath}")
+
+        return savedPath
+
+    else:
+        raise FileNotFoundError("No parent folder named 'SLAC25' detected. This function can only run under SLAC25 directory.")
+
+    
+    
 if __name__ == "__main__":
     package_root = os.path.dirname(os.path.abspath(__file__))
     train_path = os.path.join(package_root, "..", "data", "train_info.csv")
