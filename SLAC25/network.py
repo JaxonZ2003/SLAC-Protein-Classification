@@ -12,13 +12,14 @@ import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
 import numpy as np
-from torch.utils.data import Subset
+import torchvision.utils as vutils
+from torch.utils.data import Subset, DataLoader
 from torchmetrics import AUROC
 from datetime import datetime
 
 from SLAC25.dataset import ImageDataset
 from SLAC25.dataloader import DataLoaderFactory
-from SLAC25.utils import split_train_val, evaluate_model, EarlyStopping, find_data_path
+from SLAC25.utils import split_train_val, evaluate_model, EarlyStopping, find_data_path, find_img_path
 from SLAC25.models import *
 
 class Wrapper:
@@ -412,78 +413,145 @@ class ModelWrapper(Wrapper): # inherits from Wrapper class
 
 
 class VAEWrapper(Wrapper):
-    def __init__(self, model, num_epochs, optimizer, batch_size=8, lr_scheduler=True, verbose=False, testmode=False, tune=False, seed=1):
-        pass
+    def __init__(self, latent_dim, num_epochs, lr=1e-4, batch_size=8, verbose=False, testmode=False):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    def _prepareTrainData(datasize=10000):
+        self.model = MyVAE(latent_dim=latent_dim).to(self.device)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
+        self.train_loader = self._prepareTrainData(10000, batch_size, testmode)
+        self.num_epochs = num_epochs if not testmode else 1
+
+        self.outdir = self._setupOutdir()
+        self.verbose = verbose
+
+
+    def _prepareTrainData(self, datasize=10000, batch_size=8, testmode=False):
         fileDir = os.path.dirname(os.path.abspath(__file__))
         dataPaths = find_data_path(fileDir)
         
         trainDataset = ImageDataset(dataPaths[0])
-        trainDataset = Subset(trainDataset, list(range(10000)))
 
-        
+        datasize = 30 if testmode else datasize
+        trainDataset = Subset(trainDataset, list(range(datasize)))
 
-    def train():
-        pass
+        return DataLoader(trainDataset, batch_size=batch_size, shuffle=True)
+
+    def _setupOutdir(self):
+        ts=str(datetime.now()).replace(" ", "_")
+        odir=f"/scratch/slac/vae.{ts}"
+        os.makedirs(odir, exist_ok=True)
+        return odir
+    
+    def train(self):
+        for epoch in range(self.num_epochs):
+            self.model.train()
+            total_loss = 0
+            
+            if self.verbose:
+                nbatches = len(self.train_loader)
+
+            for i, (imgs, _) in enumerate(self.train_loader):
+            
+                if self.verbose:
+                    print(f"processing epoch {epoch+1}, batch {i+1}/{nbatches} (batchsize={len(imgs)})", flush=True, end="\r")
+            
+                imgs = imgs.to(self.device, dtype=torch.float32)
+                recon, mu, logvar = self.model(imgs)
+                loss = self.model.loss_function(recon, imgs, mu, logvar)
+
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
+                total_loss += loss.item()
+
+                if i == 0:
+                    vutils.save_image(imgs[:4], f"{self.outdir}/epoch{epoch+1}_input.png", nrow=2)
+                    vutils.save_image(recon[:4], f"{self.outdir}/epoch{epoch+1}_recon.png", nrow=2)
+
+            print()
+            print(f"Epoch {epoch+1}: Loss = {total_loss / len(self.train_loader):.6f}")
+
+        torch.save(self.model.state_dict(), f"{self.outdir}/vae_model_{epoch+1}.pth")
+        print(f"Training complete.")
+        print(f"Model saved at {self.outdir}.")
+    
+    def generate_img(self):
+        self.model.load_state_dict(torch.load("vae_outputs/vae_model.pth", map_location=self.device))
+        self.model.eval()
+
+        z = torch.randn(16, self.dim).to(self.device)
+        samples = self.model.decode(z)
+
+        savedName = find_img_path("vae_outputs", "synthetic_samples.png")
+
+        vutils.save_image(samples, savedName, nrow=4)
+
+        print(f"🧪 Synthetic images saved to {savedName}")
+
 
 if __name__ == "__main__":
     ########## parse arguments #########
-    from argparse import ArgumentParser
-    ap = ArgumentParser()
-    ap.add_argument("--nepoch", type=int, default=10)
-    ap.add_argument("--outdir", type=str, default=None)
-    ap.add_argument("--lr", type=float, default=0.001)
-    args = ap.parse_args()
+    BATCH_SIZE = 8
+    EPOCHS = 10
+    LATENT_DIM = 4
+    vae = VAEWrapper(LATENT_DIM, EPOCHS, verbose=True, testmode=True)
+    vae.train()
+    
+    # from argparse import ArgumentParser
+    # ap = ArgumentParser()
+    # ap.add_argument("--nepoch", type=int, default=10)
+    # ap.add_argument("--outdir", type=str, default=None)
+    # ap.add_argument("--lr", type=float, default=0.001)
+    # args = ap.parse_args()
 
-    if args.outdir is None:
+    # if args.outdir is None:
         
-        try:
-            slurm_jid = os.environ['SLURM_JOB_ID']
-            slurm_jname = os.environ['SLURM_JOB_NAME']
-            username = os.environ['USER']
-            args.outdir = f"/scratch/slac/models/{username}.{slurm_jname}.{slurm_jid}"
-        except KeyError:
-            args.outdir = "./models"
+    #     try:
+    #         slurm_jid = os.environ['SLURM_JOB_ID']
+    #         slurm_jname = os.environ['SLURM_JOB_NAME']
+    #         username = os.environ['USER']
+    #         args.outdir = f"/scratch/slac/models/{username}.{slurm_jname}.{slurm_jid}"
+    #     except KeyError:
+    #         args.outdir = "./models"
 
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    # simple model
-    model = BaselineCNN(num_classes=4, keep_prob=0.75)
-    model.to(device)
+    # # simple model
+    # model = BaselineCNN(num_classes=4, keep_prob=0.75)
+    # model.to(device)
 
-    ########## split train set into train and val if validation set does not exist #########
-    #split_train_val('./data/train_info.csv', './data/test_info.csv', './data/val_info.csv', seed=42)
+    # ########## split train set into train and val if validation set does not exist #########
+    # #split_train_val('./data/train_info.csv', './data/test_info.csv', './data/val_info.csv', seed=42)
 
-    ########## dataset paths #########
-    csv_train_file = './data/train_info.csv'
-    csv_test_file = './data/test_info.csv'
-    csv_val_file = './data/val_info.csv'
+    # ########## dataset paths #########
+    # csv_train_file = './data/train_info.csv'
+    # csv_test_file = './data/test_info.csv'
+    # csv_val_file = './data/val_info.csv'
 
-    # load the datasets
-    train_dataset = ImageDataset(csv_train_file)
-    test_dataset = ImageDataset(csv_test_file)
-    val_dataset = ImageDataset(csv_val_file)
+    # # load the datasets
+    # train_dataset = ImageDataset(csv_train_file)
+    # test_dataset = ImageDataset(csv_test_file)
+    # val_dataset = ImageDataset(csv_val_file)
 
-    train_factory = DataLoaderFactory(train_dataset, num_workers=4)
-    train_factory.setSequentialSampler()
-    test_factory = DataLoaderFactory(test_dataset, num_workers=4)
-    test_factory.setSequentialSampler()
-    val_factory = DataLoaderFactory(val_dataset, num_workers=4)
-    val_factory.setSequentialSampler()
+    # train_factory = DataLoaderFactory(train_dataset, num_workers=4)
+    # train_factory.setSequentialSampler()
+    # test_factory = DataLoaderFactory(test_dataset, num_workers=4)
+    # test_factory.setSequentialSampler()
+    # val_factory = DataLoaderFactory(val_dataset, num_workers=4)
+    # val_factory.setSequentialSampler()
 
-    train_loader = train_factory.outputDataLoader()
-    test_loader = test_factory.outputDataLoader()
-    val_loader = val_factory.outputDataLoader()
+    # train_loader = train_factory.outputDataLoader()
+    # test_loader = test_factory.outputDataLoader()
+    # val_loader = val_factory.outputDataLoader()
 
-    criterion = nn.CrossEntropyLoss() # internally computes the softmax so no need for it. 
-    optimizer = optim.Adam(model.parameters(), lr=args.lr)
-    lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=5, min_lr=1e-6)
+    # criterion = nn.CrossEntropyLoss() # internally computes the softmax so no need for it. 
+    # optimizer = optim.Adam(model.parameters(), lr=args.lr)
+    # lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=5, min_lr=1e-6)
     
     
-    ########## train the model #########
-    # train_log = fit(model, train_loader, val_loader, num_epochs=args.nepoch, 
-    #                 optimizer=optimizer, criterion=criterion, device=device, 
-    #                 lr_scheduler=lr_scheduler, outdir=args.outdir)
-    #test_log = test(model, test_loader, criterion, device) # will save testing for later
+    # ########## train the model #########
+    # # train_log = fit(model, train_loader, val_loader, num_epochs=args.nepoch, 
+    # #                 optimizer=optimizer, criterion=criterion, device=device, 
+    # #                 lr_scheduler=lr_scheduler, outdir=args.outdir)
+    # #test_log = test(model, test_loader, criterion, device) # will save testing for later
