@@ -11,79 +11,86 @@ from torchvision.transforms import v2
 from PIL import Image
 from datetime import datetime
 
-from SLAC25.transform import TransformV1
+from SLAC25.transform import TransformV1, preprocess
 
 
 class ImageDataset(Dataset):
-  def __init__(self, csvfilePath, transform=None, config=None, recordTransform=False):
+  def __init__(self, csvfilePath, transform=preprocess, config=None, recordTransform=False):
     self.csvfilePath = csvfilePath
     self.dataframe = pd.read_csv(csvfilePath)
-    self.datasetType = self._checkTrainTest()
-    self.config = self._loadConfig()
-    self.transform = None
-    self._setupTransform(transform, config, recordTransform)
+    self.transform = transform
+    # self.root_dir = "/home/rebeccachang/marco.ccr.buffalo.edu/data/archive/train_out/"
+    # self.datasetType = self._checkTrainTest()
+    # self.config = self._loadConfig()
+    # self._setupTransform(transform, config, recordTransform)
 
-    self.datasize = self.dataframe.shape[0]
+    # self.datasize = self.dataframe.shape[0]
     self.numLabel = self.dataframe['label_id'].nunique()
-    self.labeldict = {idnum: self.dataframe.index[self.dataframe['label_id'] == idnum].to_list() for idnum in self.dataframe['label_id'].value_counts().index}
+    # self.labeldict = {idnum: self.dataframe.index[self.dataframe['label_id'] == idnum].to_list() for idnum in self.dataframe['label_id'].value_counts().index}
 
     dataLastModified = os.stat(self.csvfilePath).st_mtime
     self.dataLastModified = datetime.fromtimestamp(dataLastModified).strftime('%Y-%m-%d %H:%M:%S')
   
   def __len__(self):
-    return self.datasize
+    return len(self.dataframe)
   
   def __getitem__(self, idx):
-    self.transform._emptyRecord(idx) # clean up the transform record of past imgs
+    # if idx in tensor, then change to python list
+    if torch.is_tensor(idx):
+      idx = idx.tolist()
 
-    img = Image.open(self.getImagePath(idx))
-    img = self.transform.preprocessing(img) # apply the basic transform to the image
+    img_path, label_row = self.getPathAndLabel(idx)
 
-    # apply augmentations
-    img = self.transform._random_rotation(img, idx)
-    img = self.transform._random_horizontal_flip(img, idx)
-    img = self.transform._random_vertical_flip(img, idx)
-    img = self.transform._random_gaussian_blur(img, idx)
+    img = Image.open(img_path)
 
-    label = torch.tensor(self.getLabelId(idx), dtype = torch.long) # convert the label to a tensor
-    return img, label
+    if self.transform:
+     img_t = self.transform(img) # resize and conver to tensor
+
+    label_t = torch.tensor(label_row, dtype = torch.short) # convert the label to a tensor
+    return img_t, label_t
   
-  def getImagePath(self, idx):
+  def getPathAndLabel(self, idx):
     row = self.dataframe.iloc[idx]
-    return row['image_path']
+    return (row['image_path'], row['label_id'])
   
-  def getLabelId(self, idx):
-    row = self.dataframe.iloc[idx]
-    return row['label_id']
+  # def getImagePath(self, idx):
+  #   row = self.dataframe.iloc[idx]
+  #   # img_label_text = row['label_text']
+  #   # img_path = os.path.join(self.root_dir, img_label_text)
+  #   return row['image_path']
   
-  def _checkTrainTest(self):
-    if "test_info" in self.csvfilePath:
-      return "TestSet"
+  # def getLabelId(self, idx):
+  #   row = self.dataframe.iloc[idx]
+  #   return row['label_id']
+  
+  # def _checkTrainTest(self):
+  #   if "test_info" in self.csvfilePath:
+  #     return "TestSet"
     
-    if "train_info" in self.csvfilePath:
-      return "TrainSet"
+  #   if "train_info" in self.csvfilePath:
+  #     return "TrainSet"
     
-    else:
-      return "Others"
+  #   else:
+  #     return "Others"
   
-  def _loadConfig(self):
-    package_root = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(package_root, "SLAC25_config.json")
-    config_path = os.path.abspath(config_path)
+  # def _loadConfig(self):
+  #   package_root = os.path.dirname(os.path.abspath(__file__))
+  #   config_path = os.path.join(package_root, "SLAC25_config.json")
+  #   config_path = os.path.abspath(config_path)
 
-    with open(config_path, "r") as f:
-      allConfig = json.load(f)
+  #   with open(config_path, "r") as f:
+  #     allConfig = json.load(f)
     
-    config = allConfig["dataset"]["ImageDataset"]
+  #   config = allConfig["dataset"]["ImageDataset"]
 
-    return config
+  #   return config
   
-  def _setupTransform(self, transform, config, recordTransform):
-    if not transform:
-      self.transform = TransformV1(config, recordTransform)
+  # def _setupTransform(self, transform, config, recordTransform):
+  #   if not transform:
+  #     self.transform = TransformV1(config, recordTransform)
     
-    else:
-      self.transform = transform
+  #   else:
+  #     self.transform = transform
 
   
   def visualizeAndSave(self, idx, savedPath=None):

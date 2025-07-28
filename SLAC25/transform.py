@@ -4,6 +4,13 @@ import torch
 from torchvision.transforms import v2
 # from PIL import Image
 
+
+preprocess = v2.Compose([
+  v2.Resize((512, 512)),
+  v2.PILToTensor()
+])
+
+
 tfConfig = {
     "rotation": {
         "on": True,
