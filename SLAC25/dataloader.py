@@ -91,34 +91,15 @@ class DataLoaderFactory:
                           drop_last=self.drop_last,
                           shuffle=self.shuffle)
 
-    # def _create_sampler(self, sampler_type, weights, indices):
-    #     """
-    #     Creates the appropriate sampler based on the sampler_type.
+def get_dl(dataset, batch_size):
+    seq_sampler = SequentialSampler(dataset)
+    return DataLoader(dataset,
+                      batch_size=batch_size,
+                      sampler=seq_sampler,
+                      num_workers=4, # for a single gpu
+                      drop_last=False,
+                      shuffle=False)
 
-    #     Args:
-    #         sampler_type (str): The type of sampler to use ('random', 'weighted', 'sequential', 'subset').
-    #         weights (list, optional): Weights for WeightedRandomSampler.
-    #         indices (list, optional): Indices for SubsetRandomSampler.
-
-    #     Returns:
-    #         torch.utils.data.Sampler or None: The configured sampler.
-    #     """
-    #     if sampler_type == 'random':
-    #         return RandomSampler(self.dataset)
-    #     elif sampler_type == 'weighted':
-    #         if weights is None:
-    #             raise ValueError("Weights are required for weighted sampling.")
-    #         return WeightedRandomSampler(weights, num_samples=len(weights), replacement=True)
-    #     elif sampler_type == 'sequential':
-    #         return SequentialSampler(self.dataset)
-    #     elif sampler_type == 'subset':
-    #         if indices is None:
-    #             raise ValueError("Indices are required for subset sampling.")
-    #         return SubsetRandomSampler(indices)
-    #     return None
-
-    # def get_loader(self):
-    #     return self.dataloader
 
 if __name__ == "__main__":
     ##### Testing the dataloader #####

@@ -2,7 +2,7 @@ import random
 import torch
 
 from torchvision.transforms import v2
-from kornia.augmentation import RandomCrop, RandomAffine
+from kornia.augmentation import CenterCrop, RandomAffine
 import torch.nn as nn
 # from PIL import Image
 
@@ -26,7 +26,6 @@ class DataAugmentation(nn.Module):
                    translate=(0.1, 0.1),
                    p=0.5),
       CenterCrop(size=(300,300)),
-      
     )
   
   @torch.no_grad()
