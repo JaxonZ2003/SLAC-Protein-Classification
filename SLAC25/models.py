@@ -242,3 +242,39 @@ class BaselineCNN(nn.Module):
 
     def summary(self):
         print(self)
+
+
+
+def ConvBL(ni, no, ks, act=True):
+  """Baseline CNN Layers helper"""
+  layers = [nn.Conv2d(ni, no, kernel_size=ks, stride=2, padding=ks//2)]
+  if act: layers.append(nn.ReLU())
+  layers.append(nn.BatchNorm2d(no))
+  return nn.Sequential(*layers)
+
+def ClfrBL(no, num_classes):
+  """Baseline CNN final classifier"""
+  return nn.Sequential(
+    nn.Flatten(),
+    nn.LazyLinear(no, bias=True),
+    nn.ReLU(),
+    nn.Linear(no, num_classes, bias=True)
+  )
+
+##### Simple Baseline
+class SimpleCNN(nn.Module):
+  def __init__(self, num_classes, in_channel, ks):
+    super(SimpleCNN, self).__init__()
+    self.ConvBL_1 = ConvBL(ni=in_channel, no=8, ks=ks)
+    self.ConvBL_2 = ConvBL(ni=8, no=16, ks=ks)
+    self.ConvBL_3 = ConvBL(ni=16, no=32, ks=ks)
+    self.ConvBL_4 = ConvBL(ni=32, no=64, ks=ks)
+    self.Classifier = ClfrBL(128, num_classes)
+  
+  def forward(self, x):
+    x = self.ConvBL_1(x)
+    x = self.ConvBL_2(x)
+    x = self.ConvBL_3(x)
+    x = self.ConvBL_4(x)
+    x = self.Classifier(x)
+    return x

@@ -2,7 +2,8 @@ import random
 import torch
 
 from torchvision.transforms import v2
-from kornia.augmentation import CenterCrop, RandomAffine
+# from kornia.augmentation import CenterCrop, RandomAffine
+import kornia.augmentation as K
 import torch.nn as nn
 # from PIL import Image
 
@@ -19,19 +20,33 @@ class Preprocess:
 class DataAugmentation(nn.Module):
   def __init__(self):
     super().__init__()
-    self.transform = nn.Sequential(
-      RandomAffine(degrees=179, 
-                   scale=(1.0, 1.2), 
-                   shear=20,
-                   translate=(0.1, 0.1),
-                   p=0.5),
-      CenterCrop(size=(300,300)),
+    self.random_transforms = K.AugmentationSequential(
+      K.RandomAffine(
+        degrees=179, 
+        scale=(1.0, 1.2), 
+        shear=20,
+        translate=(0.1, 0.1),
+        p=0.5
+      ),
+      K.RandomResizedCrop(
+        size=(300, 300),
+        scale=(0.5, 1.0), # crop within 50% to 100% of the original img
+      )
+    )
+
+    self.deterministic_transform = K.AugmentationSequential(
+      K.Resize(size=(300, 300))
     )
   
-  @torch.no_grad()
+  # @torch.no_grad()
   def forward(self, img):
-    x_out = self.transform(img)
-    return x_out
+    if self.training: # training mode
+      img = self.random_transforms(img)
+    
+    else:
+      img = self.deterministic_transform(img)
+
+    return img
 
 
 

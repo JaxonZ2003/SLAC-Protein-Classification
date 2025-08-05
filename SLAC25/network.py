@@ -489,6 +489,84 @@ class VAEWrapper(Wrapper):
         print(f"🧪 Synthetic images saved to {savedName}")
 
 
+class Learner:
+  def __init__(self, model, train_loader, val_loader, optimizer, criterion, batch_tfm, test_loader=None):
+    self.model = model
+    self.train_loader = train_loader
+    self.val_loader = val_loader
+    self.test_loader = test_loader
+    self.optimizer = optimizer
+    self.criterion = criterion
+    self.transform = batch_tfm()
+    self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    """Move model and batch_tfm to device to set up transform on GPU"""
+    self.model = self.model.to(self.device)
+    self.transform = self.transform.to(self.device)
+  
+
+  def _train_one_epoch(self):
+    self.model.train()
+    self.transform.train() # Kornia augmentations have train/eval modes
+
+    total_loss = 0.0
+    correct = 0
+
+    for (imgs, labels) in self.train_loader:
+      imgs, labels = imgs.to(self.device), labels.to(self.device)
+
+      # Batch Transform: Data Augmentation
+      with torch.no_grad():
+        augmented_imgs = self.transform(imgs)
+      
+      self.optimizer.zero_grad()
+      out = self.model(augmented_imgs)
+      loss = self.criterion(out, labels)
+      loss.backward()
+      self.optimizer.step()
+
+      total_loss += loss.item()
+
+      with torch.no_grad():
+        pred = out.argmax(dim=1)
+        correct += int((pred == labels).sum())
+    
+    train_loss = total_loss / len(self.train_loader)
+    train_accuracy = correct / len(self.train_loader.dataset)
+    
+    return (train_loss, train_accuracy)
+  
+  def _validate_one_epoch(self):
+    self.model.eval()
+    self.transform.eval()
+
+    # metrics and loss
+    correct = 0
+    total_loss = 0.0
+
+    with torch.no_grad():
+      for (imgs, labels) in self.val_loader:
+        imgs, labels = imgs.to(self.device), labels.to(self.device)
+
+        # just do full sized crop to the target shape
+        fs_cropped_imgs = self.transform(imgs)
+
+        out = self.model(fs_cropped_imgs)
+
+        # calculate val loss
+        loss = self.criterion(out, labels)
+        total_loss += loss.item()
+
+        # calculate accuracy
+        pred = out.argmax(dim=1)
+        correct += int((pred == labels).sum())
+
+    val_accuracy = correct / len(self.val_loader.dataset)
+    val_loss = total_loss / len(self.val_loader)
+
+    return (val_loss, val_accuracy)
+  
+
 if __name__ == "__main__":
     ########## parse arguments #########
     BATCH_SIZE = 8
