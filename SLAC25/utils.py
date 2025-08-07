@@ -8,6 +8,24 @@ import json
 import matplotlib.pyplot as plt
 from models import *
 
+from SLAC25.dataset import ImageDataset
+
+def balance_class(dataset, random_state=1):
+    df = dataset.dataframe
+
+    """find the samllest number of sample and the corresponding class"""
+    sorted_df = df.value_counts('label_id') # new df sorted by num classes
+    min_size = sorted_df.min() # num samples the min class has
+    min_class = sorted_df.idxmin() # class having the min sample
+
+    # """downsampling the dataset"""
+    num_class = df['label_id'].nunique()
+    balanced_df = df.groupby('label_id').apply(lambda x: x.sample(n=min_size, random_state=random_state)).reset_index(drop=True)
+    shuffled_df = balanced_df.sample(frac=1, random_state=random_state) # shuffle the samples
+
+    return ImageDataset(df=shuffled_df)
+
+
 def evaluate_model(model, dataloader, criterion, device):
     """
     Evaluation helper function for a model to evaluate on a dataset.

@@ -1,12 +1,14 @@
 README.md
 pyproject.toml
 SLAC25/__init__.py
+SLAC25/callbacks.py
 SLAC25/dataloader.py
 SLAC25/dataset.py
 SLAC25/models.py
 SLAC25/network.py
 SLAC25/sampler.py
 SLAC25/transform.py
+SLAC25/tune.py
 SLAC25/utils.py
 SLAC25.egg-info/PKG-INFO
 SLAC25.egg-info/SOURCES.txt
@@ -14,9 +16,11 @@ SLAC25.egg-info/dependency_links.txt
 SLAC25.egg-info/entry_points.txt
 SLAC25.egg-info/requires.txt
 SLAC25.egg-info/top_level.txt
+SLAC25/scripts/autoencoder_test.py
 SLAC25/scripts/base_mod_test.py
 SLAC25/scripts/lrloop.py
-SLAC25/test/test_dataset.py
+SLAC25/scripts/sample_benchmark.py
+SLAC25/tests/test_VAE.py
 SLAC25/tests/test_dataloader.py
 SLAC25/tests/test_dataset.py
 SLAC25/tests/test_models.py

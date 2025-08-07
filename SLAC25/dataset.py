@@ -11,14 +11,14 @@ from torchvision.transforms import v2
 from PIL import Image
 from datetime import datetime
 
-# from SLAC25.transform import TransformV1, Preprocess
+from SLAC25.transform import Preprocess
 
 
 class ImageDataset(Dataset):
-  def __init__(self, csvfilePath, transform=None):
+  def __init__(self, csvfilePath=None, df=None, transform=None):
     self.csvfilePath = csvfilePath
-    self.dataframe = pd.read_csv(csvfilePath)
-    self.transform = transform
+    self.dataframe = pd.read_csv(csvfilePath) if csvfilePath else df
+    self.transform = Preprocess() if not transform else transform
     # self.root_dir = "/home/rebeccachang/marco.ccr.buffalo.edu/data/archive/train_out/"
     # self.datasetType = self._checkTrainTest()
     # self.config = self._loadConfig()
@@ -26,8 +26,8 @@ class ImageDataset(Dataset):
     self.numLabel = self.dataframe['label_id'].nunique()
     # self.labeldict = {idnum: self.dataframe.index[self.dataframe['label_id'] == idnum].to_list() for idnum in self.dataframe['label_id'].value_counts().index}
 
-    dataLastModified = os.stat(self.csvfilePath).st_mtime
-    self.dataLastModified = datetime.fromtimestamp(dataLastModified).strftime('%Y-%m-%d %H:%M:%S')
+    # dataLastModified = os.stat(self.csvfilePath).st_mtime
+    # self.dataLastModified = datetime.fromtimestamp(dataLastModified).strftime('%Y-%m-%d %H:%M:%S')
   
   def __len__(self):
     return len(self.dataframe)
