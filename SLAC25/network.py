@@ -16,6 +16,8 @@ import torchvision.utils as vutils
 from torch.utils.data import Subset, DataLoader
 from torchmetrics import AUROC
 from datetime import datetime
+from torchmetrics import MetricCollection
+from torchmetrics.classification import MulticlassAccuracy, MulticlassF1Score, MulticlassAUROC
 
 from SLAC25.dataset import ImageDataset
 from SLAC25.dataloader import DataLoaderFactory
@@ -490,7 +492,7 @@ class VAEWrapper(Wrapper):
 
 
 class Learner:
-  def __init__(self, model, train_loader, val_loader, optimizer, criterion, batch_tfm, test_loader=None):
+  def __init__(self, model, train_loader, val_loader, optimizer, criterion, batch_tfm, metrics=None, test_loader=None, cbs=[]):
     self.model = model
     self.train_loader = train_loader
     self.val_loader = val_loader
@@ -500,17 +502,28 @@ class Learner:
     self.transform = batch_tfm()
     self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    self.metrics = MetricCollection({
+      'Accuracy_Micro': MulticlassAccuracy(num_classes=4, average='micro'),
+      'Accuracy_Per_Class': MulticlassAccuracy(num_classes=4, average='none'),
+      'F1_Score': MulticlassF1Score(num_classes=4, average='micro'),
+      'AUROC': MulticlassAUROC(num_classes=4)
+    }) if not metrics else metrics
+
+    # A list to hold all callback objects
+    self.cbs = cbs
+
     """Move model and batch_tfm to device to set up transform on GPU"""
+    self.metrics = self.metrics.to(self.device)
     self.model = self.model.to(self.device)
     self.transform = self.transform.to(self.device)
-  
 
   def _train_one_epoch(self):
     self.model.train()
     self.transform.train() # Kornia augmentations have train/eval modes
+    # self.metrics.reset()
 
     total_loss = 0.0
-    correct = 0
+    # correct = 0
 
     for (imgs, labels) in self.train_loader:
       imgs, labels = imgs.to(self.device), labels.to(self.device)
@@ -524,24 +537,25 @@ class Learner:
       loss = self.criterion(out, labels)
       loss.backward()
       self.optimizer.step()
-
       total_loss += loss.item()
 
-      with torch.no_grad():
-        pred = out.argmax(dim=1)
-        correct += int((pred == labels).sum())
-    
+      # with torch.no_grad():
+        # self.metrics.update(out, labels)
+        # pred = out.argmax(dim=1)
+        # correct += int((pred == labels).sum())
+        
     train_loss = total_loss / len(self.train_loader)
-    train_accuracy = correct / len(self.train_loader.dataset)
+    # epoch_metrics = self.metrics.compute()
+    # train_accuracy = correct / len(self.train_loader.dataset)
     
-    return (train_loss, train_accuracy)
+    return train_loss
   
   def _validate_one_epoch(self):
     self.model.eval()
     self.transform.eval()
+    self.metrics.reset()
 
-    # metrics and loss
-    correct = 0
+    # correct = 0
     total_loss = 0.0
 
     with torch.no_grad():
@@ -557,14 +571,33 @@ class Learner:
         loss = self.criterion(out, labels)
         total_loss += loss.item()
 
+        self.metrics.update(out, labels)
+
         # calculate accuracy
-        pred = out.argmax(dim=1)
-        correct += int((pred == labels).sum())
-
-    val_accuracy = correct / len(self.val_loader.dataset)
+        # pred = out.argmax(dim=1)
+        # correct += int((pred == labels).sum())
+    # val_accuracy = correct / len(self.val_loader.dataset)
     val_loss = total_loss / len(self.val_loader)
+    epoch_metrics = self.metrics.compute()
 
-    return (val_loss, val_accuracy)
+    return (val_loss, epoch_metrics)
+  
+  def fit(self, num_epoch):
+    for cb in self.cbs: cb.on_fit_start(self)
+
+    for epoch in range(num_epoch):
+      train_loss = self._train_one_epoch()
+      val_loss, val_metrics = self._validate_one_epoch()
+
+      logs = {
+        'train_loss': train_loss,
+        'val_loss': val_loss,
+        'metrics': val_metrics
+      }
+
+      for cb in self.cbs: cb.on_epoch_end(self, epoch, logs)
+    
+    for cb in self.cbs: cb.on_fit_end()
   
 
 if __name__ == "__main__":
